@@ -1,0 +1,35 @@
+{
+  "id": "1782968431.5510702",
+  "title": "Python Threaded Socket Server with LevelDB",
+  "instructions": "Build a threaded socket server that provides MySQL-like command interface over LevelDB backend. The server will accept connections via netcat, authenticate users, parse SQL-like commands, and execute database operations on LevelDB.\n\nArchitecture:\n- Threaded socket server handling multiple concurrent clients\n- Simple authentication (admin/skrlat) with session management\n- LevelDB integration for persistent key-value storage\n- Command parsing layer to translate MySQL-like syntax to LevelDB operations\n- Commands framework for extensible operation handling\n\nKey Components:\n1. Server: Threaded TCP socket server\n2. Auth: Simple username/password validation\n3. LevelDB: Database wrapper with CRUD operations\n4. Parser: SQL-like command parser (CREATE, DELETE, OPEN, SELECT, INSERT, UPDATE)\n5. Commands: Command execution framework",
+  "startTimestamp": 1782968431.5510752,
+  "endTimestamp": 1782971349.207407,
+  "tasks": {
+    "1782968443.5496657": {
+      "id": "1782968443.5496657",
+      "status": "in_progress",
+      "instruction": "Create tests/test_client.py with netcat-style testing:\n1. Simple Python socket client for testing\n2. Test cases for:\n   - Connection and authentication\n   - Each SQL command type\n   - Error handling\n3. Create README.md with:\n   - Installation instructions (pip install -r requirements.txt)\n   - How to start server (python main.py)\n   - How to test with netcat (nc localhost 9999)\n   - Example commands\n\nSuccess criteria: README has clear instructions, test client can verify all functionality.",
+      "startTimestamp": 1782968480.740202,
+      "endTimestamp": null,
+      "log": [
+        {
+          "timestamp": 1782971334.902569,
+          "text": "Build started"
+        }
+      ]
+    },
+    "1782968446.1758106": {
+      "id": "1782968446.1758106",
+      "status": "in_progress",
+      "instruction": "Create src/db.py with LevelDB integration:\n\n1. Install plyvel: pip install plyvel\n2. Create Database class with methods:\n   - __init__(self, db_path) - initialize LevelDB connection\n   - create_table(self, table_name) - create table (prefix keys with table_name:)\n   - delete_table(self, table_name) - delete all keys with table prefix\n   - insert(self, table_name, key, value) - insert key-value\n   - select(self, table_name, key=None) - get by key or all in table\n   - update(self, table_name, key, value) - update existing key\n   - delete(self, table_name, key) - delete key\n   - close(self) - close connection\n\nUse table prefix format: \"table_name:key\" for namespacing.\nTest each method with simple print statements.",
+      "startTimestamp": 1782969128.5228622,
+      "endTimestamp": null,
+      "log": [
+        {
+          "timestamp": 1782971334.9025729,
+          "text": "Build started"
+        }
+      ]
+    }
+  }
+}
