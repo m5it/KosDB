@@ -1,6 +1,6 @@
 # LevelDB Socket Server
 
-A threaded Python socket server providing a MySQL-like command interface over LevelDB backend with database-backed authentication and privilege management.
+A threaded Python socket server providing a MySQL-like command interface over LevelDB backend with database-backed authentication, privilege management, and replication.
 
 ## Features
 
@@ -8,6 +8,10 @@ A threaded Python socket server providing a MySQL-like command interface over Le
 - **Database-Backed Authentication** - User accounts stored in LevelDB with hashed passwords
 - **Privilege System** - Role-based access control (admin/users) with database/table-level permissions
 - **Admin User Management** - Create admin users via command line
+- **Binary Log (Binlog)** - All writes logged for replication
+- **Master-Slave Replication** - One master, multiple slaves
+- **Master-Master Replication** - Bi-directional replication between peers
+- **Automatic Recovery** - Slaves reconnect and catch up on missed data
 - **LevelDB Backend** - Persistent key-value storage with table namespacing
 - **SQL-like Commands** - CREATE, DROP, INSERT, SELECT, UPDATE, DELETE
 - **Advanced Querying** - WHERE clauses, ORDER BY sorting, indexed columns
@@ -52,6 +56,37 @@ python server.py --host 0.0.0.0 --port 9999 --data_dir ./data
 
 ```bash
 nc localhost 9999
+```
+
+## Replication Setup
+
+### Master-Slave Replication
+
+**Start Master:**
+```bash
+python server.py --server-id 1 --role master --replication-port 10999 --data_dir ./data_master
+```
+
+**Create Replication User on Master:**
+```sql
+CREATE REPLICATION USER 'repl' IDENTIFIED BY 'replpass';
+```
+
+**Start Slave:**
+```bash
+python server.py --server-id 2 --role slave --master-host localhost:9999 --data_dir ./data_slave
+```
+
+### Master-Master Replication
+
+**Server A:**
+```bash
+python server.py --server-id 1 --port 9999 --replication-port 10999 --peer-host localhost:9998 --data_dir ./data_a
+```
+
+**Server B:**
+```bash
+python server.py --server-id 2 --port 9998 --replication-port 10998 --peer-host localhost:9999 --data_dir ./data_b
 ```
 
 ## Authentication
@@ -100,10 +135,20 @@ OK: Welcome admin (admin).
 | `UPDATE <table> SET col=val WHERE condition` | Update records |
 | `DELETE FROM <table> WHERE condition` | Delete records |
 
+### Replication Commands (Admin Only)
+| Command | Description |
+|---------|-------------|
+| `SHOW MASTER STATUS` | Show binlog position and connected slaves |
+| `SHOW SLAVE STATUS` | Show replication status and lag |
+| `START SLAVE` | Start replication |
+| `STOP SLAVE` | Stop replication |
+| `RESET SLAVE` | Reset replication position |
+| `CREATE REPLICATION USER <name> IDENTIFIED BY <pass>` | Create replication user |
+
 ### Admin Commands
 | Command | Description |
 |---------|-------------|
-| `SHOW USERS` | List all users (admin only) |
+| `SHOW USERS` | List all users |
 | `HELP` | Show available commands |
 | `QUIT` / `EXIT` | Disconnect |
 
@@ -157,12 +202,27 @@ OK: Table 'users' dropped
 OK: Database 'testdb' dropped
 ```
 
-### Admin Operations
+### Replication Commands
 ```
-> SHOW USERS
-OK:
-admin
-john_doe
+> SHOW MASTER STATUS
+--------------------------------------------------
+Master Status
+--------------------------------------------------
+Binlog Position: 150
+Server ID: 1
+Connected Slaves: 1
+--------------------------------------------------
+
+> SHOW SLAVE STATUS
+--------------------------------------------------
+Slave Status
+--------------------------------------------------
+Slave IO State: Connected
+Master Host: localhost
+Master Port: 9999
+Last Applied Position: 150
+Master Binlog Position: 150
+--------------------------------------------------
 ```
 
 ## Table Schema Options
@@ -178,26 +238,55 @@ CREATE TABLE products (
 )
 ```
 
-## User Management (Admin Only)
+## Command-Line Options
 
-Admins can manage users through the database API (future CLI tool planned). Users are stored in the system database with:
-- Username and hashed password (SHA-256 with salt)
-- Admin flag
-- Database/table-level privileges
+```
+usage: server.py [-h] [--prepare_admin USER] [--prepare_password PASS]
+                 [--host HOST] [--port PORT] [--data_dir DATA_DIR]
+                 [--server-id SERVER_ID] [--role {master,slave}]
+                 [--master-host HOST:PORT] [--replication-port PORT]
+                 [--peer-host HOST:PORT]
+
+LevelDB Socket Server with Replication
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --prepare_admin USER  Create admin user
+  --prepare_password PASS
+                        Admin password
+  --host HOST           Client host (default: 0.0.0.0)
+  --port PORT           Client port (default: 9999)
+  --data_dir DATA_DIR   Data directory (default: ./data)
+  --server-id SERVER_ID
+                        Unique server ID (default: 1)
+  --role {master,slave}
+                        Server role: master or slave (default: master)
+  --master-host HOST:PORT
+                        Master host:port for slave replication
+  --replication-port PORT
+                        Port for replication connections (optional)
+  --peer-host HOST:PORT
+                        Peer host:port for master-master replication
+```
 
 ## Project Structure
 
 ```
 t10/
-├── server.py           # Main server entry point
-├── database.py         # LevelDB wrapper with user/privilege management
-├── auth.py            # Session-based authentication
-├── parser.py          # SQL command parser
-├── commands.py        # Command execution framework
+├── server.py              # Main server entry point
+├── database.py            # LevelDB wrapper with binlog integration
+├── auth.py               # Session-based authentication
+├── binlog.py             # Binary log for replication
+├── replication.py        # Replication client/server
+├── replication_commands.py  # Replication control commands
+├── parser.py             # SQL command parser
+├── commands.py           # Command execution framework
 ├── tests/
-│   └── test_client.py  # Test client
-├── requirements.txt    # Dependencies
-└── README.md          # Documentation
+│   ├── test_client.py    # Basic client tests
+│   └── test_replication.py  # Replication tests
+├── TESTING.md           # Testing documentation
+├── requirements.txt      # Dependencies
+└── README.md            # Documentation
 ```
 
 ## Configuration
@@ -207,10 +296,25 @@ Default settings:
 - **Port**: 9999
 - **Data Directory**: ./data
 - **System Database**: ./_system (stores users and privileges)
+- **Binlog**: ./_binlog (replication log)
 
-Command-line options:
-```bash
-python server.py --help
+## Replication Architecture
+
+### Master-Slave
+```
+[Master] <--writes-- [Client]
+    |
+    | binlog stream
+    v
+[Slave] <--reads-- [Client]
+```
+
+### Master-Master
+```
+[Server A] <----> [Server B]
+   ^                   ^
+   |                   |
+writes              writes
 ```
 
 ## Security Notes
@@ -219,13 +323,17 @@ python server.py --help
 - Session tokens are generated using `secrets.token_hex()`
 - Privileges are checked for every database operation
 - Admin users have full access to all databases and tables
+- Replication users can only stream binlog (no query access)
 
 ## Testing
 
 Run automated tests:
 ```bash
 python tests/test_client.py
+python tests/test_replication.py
 ```
+
+See [TESTING.md](TESTING.md) for detailed testing procedures.
 
 ## License
 

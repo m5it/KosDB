@@ -57,6 +57,34 @@ class CommandParser:
                 r'^\s*SHOW\s+DATABASES\s*$',
                 re.IGNORECASE
             ),
+            'SHOW_USERS': re.compile(
+                r'^\s*SHOW\s+USERS\s*$',
+                re.IGNORECASE
+            ),
+            'SHOW_MASTER_STATUS': re.compile(
+                r'^\s*SHOW\s+MASTER\s+STATUS\s*$',
+                re.IGNORECASE
+            ),
+            'SHOW_SLAVE_STATUS': re.compile(
+                r'^\s*SHOW\s+SLAVE\s+STATUS\s*$',
+                re.IGNORECASE
+            ),
+            'START_SLAVE': re.compile(
+                r'^\s*START\s+SLAVE\s*$',
+                re.IGNORECASE
+            ),
+            'STOP_SLAVE': re.compile(
+                r'^\s*STOP\s+SLAVE\s*$',
+                re.IGNORECASE
+            ),
+            'RESET_SLAVE': re.compile(
+                r'^\s*RESET\s+SLAVE\s*$',
+                re.IGNORECASE
+            ),
+            'CREATE_REPL_USER': re.compile(
+                r'^\s*CREATE\s+REPLICATION\s+USER\s+[\'"]?(?P<username>\w+)[\'"]?\s+IDENTIFIED\s+BY\s+[\'"]?(?P<password>[^\'"\s]+)[\'"]?\s*$',
+                re.IGNORECASE
+            ),
             'HELP': re.compile(
                 r'^\s*HELP\s*$',
                 re.IGNORECASE
@@ -80,6 +108,18 @@ class CommandParser:
             return 'SHOW_TABLES', {}
         if command.upper() == 'SHOW DATABASES':
             return 'SHOW_DATABASES', {}
+        if command.upper() == 'SHOW USERS':
+            return 'SHOW_USERS', {}
+        if command.upper() == 'SHOW MASTER STATUS':
+            return 'SHOW_MASTER_STATUS', {}
+        if command.upper() == 'SHOW SLAVE STATUS':
+            return 'SHOW_SLAVE_STATUS', {}
+        if command.upper() == 'START SLAVE':
+            return 'START_SLAVE', {}
+        if command.upper() == 'STOP SLAVE':
+            return 'STOP_SLAVE', {}
+        if command.upper() == 'RESET SLAVE':
+            return 'RESET_SLAVE', {}
         
         # Try to match patterns
         for cmd_type, pattern in self.patterns.items():

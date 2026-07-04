@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-LevelDB Socket Server with Database-Driven Authentication
+LevelDB Socket Server with Database-Driven Authentication and Replication
 """
 
 import socket
@@ -16,6 +16,7 @@ from database import Database
 from auth import Authenticator
 from parser import CommandParser
 from commands import CommandRegistry
+from replication import ReplicationClient, ReplicationServer
 
 
 def setup_admin(db: Database, username: str, password: str):
@@ -166,15 +167,34 @@ class ClientHandler(threading.Thread):
 
 
 class SocketServer:
-    def __init__(self, host='0.0.0.0', port=9999, data_dir='./data'):
+    def __init__(self, host='0.0.0.0', port=9999, data_dir='./data',
+                 server_id=1, role='master', master_host=None, 
+                 replication_port=None, peer_host=None):
         self.host = host
         self.port = port
-        self.db = Database(data_dir)
+        self.data_dir = data_dir
+        self.server_id = server_id
+        self.role = role
+        self.master_host = master_host
+        self.replication_port = replication_port
+        self.peer_host = peer_host
+        
+        # Replication state
+        self.is_slave = (role == 'slave')
+        self.is_master_master = (peer_host is not None)
+        
+        self.db = Database(data_dir, server_id)
         self.authenticator = Authenticator(self.db)
         self.server_socket = None
         self.running = False
+        
+        # Replication components (initialized later)
+        self.replication_server = None
+        self.replication_client = None
+        self.peer_replication_client = None
     
     def start(self):
+        # Start client socket server
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.server_socket.bind((self.host, self.port))
@@ -182,8 +202,17 @@ class SocketServer:
         self.running = True
         
         print(f"[SERVER] Started on {self.host}:{self.port}")
+        print(f"[SERVER] Server ID: {self.server_id}")
+        print(f"[SERVER] Role: {self.role}")
+        if self.is_slave and self.master_host:
+            print(f"[SERVER] Master: {self.master_host}")
+        if self.is_master_master:
+            print(f"[SERVER] Peer: {self.peer_host}")
         print(f"[SERVER] Data: {self.db.data_dir}")
         print("Press Ctrl+C to stop")
+        
+        # Start replication components if configured
+        self._start_replication()
         
         try:
             while self.running:
@@ -195,21 +224,94 @@ class SocketServer:
         finally:
             self.stop()
     
+    def _start_replication(self):
+        """Initialize replication based on role."""
+        # Master-Slave: Connect to master if role=slave
+        if self.is_slave and self.master_host:
+            print(f"[REPLICATION] Slave mode - connecting to master {self.master_host}")
+            parts = self.master_host.split(':')
+            master_host = parts[0]
+            master_port = int(parts[1]) if len(parts) > 1 else 9999
+            
+            self.replication_client = ReplicationClient(
+                master_host=master_host,
+                master_port=master_port,
+                username="repl",
+                password="repl",
+                db=self.db,
+                server_id=self.server_id
+            )
+            self.replication_client.start()
+        
+        # Master-Master: Connect to peer
+        if self.peer_host:
+            print(f"[REPLICATION] Master-Master mode - connecting to peer {self.peer_host}")
+            parts = self.peer_host.split(':')
+            peer_host = parts[0]
+            peer_port = int(parts[1]) if len(parts) > 1 else 9999
+            
+            self.peer_replication_client = ReplicationClient(
+                master_host=peer_host,
+                master_port=peer_port,
+                username="repl",
+                password="repl",
+                db=self.db,
+                server_id=self.server_id
+            )
+            self.peer_replication_client.start()
+        
+        # Start replication server if port specified
+        if self.replication_port:
+            print(f"[REPLICATION] Starting replication server on port {self.replication_port}")
+            self.replication_server = ReplicationServer(
+                host=self.host,
+                port=self.replication_port,
+                db=self.db,
+                authenticator=self.authenticator
+            )
+            self.replication_server.start()
+    
     def stop(self):
         self.running = False
         if self.server_socket:
             self.server_socket.close()
+        
+        # Stop replication components
+        if self.replication_client:
+            print("[REPLICATION] Stopping replication client...")
+            self.replication_client.stop()
+        if self.peer_replication_client:
+            print("[REPLICATION] Stopping peer replication client...")
+            self.peer_replication_client.stop()
+        if self.replication_server:
+            print("[REPLICATION] Stopping replication server...")
+            self.replication_server.stop()
+        
         self.db.close()
         print("[SERVER] Stopped")
 
 
 def main():
-    parser = argparse.ArgumentParser(description='LevelDB Socket Server')
+    parser = argparse.ArgumentParser(description='LevelDB Socket Server with Replication')
+    
+    # Basic server options
     parser.add_argument('--prepare_admin', metavar='USER', help='Create admin user')
     parser.add_argument('--prepare_password', metavar='PASS', help='Admin password')
-    parser.add_argument('--host', default='0.0.0.0', help='Host (default: 0.0.0.0)')
-    parser.add_argument('--port', type=int, default=9999, help='Port (default: 9999)')
-    parser.add_argument('--data_dir', default='./data', help='Data dir (default: ./data)')
+    parser.add_argument('--host', default='0.0.0.0', help='Client host (default: 0.0.0.0)')
+    parser.add_argument('--port', type=int, default=9999, help='Client port (default: 9999)')
+    parser.add_argument('--data_dir', default='./data', help='Data directory (default: ./data)')
+    
+    # Replication options
+    parser.add_argument('--server-id', type=int, default=1, 
+                       help='Unique server ID (default: 1)')
+    parser.add_argument('--role', choices=['master', 'slave'], default='master',
+                       help='Server role: master or slave (default: master)')
+    parser.add_argument('--master-host', metavar='HOST:PORT',
+                       help='Master host:port for slave replication')
+    parser.add_argument('--replication-port', type=int,
+                       help='Port for replication connections (optional)')
+    parser.add_argument('--peer-host', metavar='HOST:PORT',
+                       help='Peer host:port for master-master replication')
     
     args = parser.parse_args()
     
@@ -232,12 +334,27 @@ def main():
     print("=" * 50)
     print(f"Host: {args.host}")
     print(f"Port: {args.port}")
+    print(f"Server ID: {args.server_id}")
+    print(f"Role: {args.role}")
     print(f"Data: {args.data_dir}")
+    if args.master_host:
+        print(f"Master: {args.master_host}")
+    if args.peer_host:
+        print(f"Peer: {args.peer_host}")
     print("\nSetup admin:")
     print(f"  python server.py --prepare_admin admin --prepare_password <pass>")
     print("-" * 50)
     
-    server = SocketServer(args.host, args.port, args.data_dir)
+    server = SocketServer(
+        host=args.host,
+        port=args.port,
+        data_dir=args.data_dir,
+        server_id=args.server_id,
+        role=args.role,
+        master_host=args.master_host,
+        replication_port=args.replication_port,
+        peer_host=args.peer_host
+    )
     server.start()
 
 

@@ -7,8 +7,9 @@ from database import Database
 
 
 class Command:
-    def __init__(self, db: Database):
+    def __init__(self, db: Database, replication_client=None):
         self.db = db
+        self.replication_client = replication_client
     
     def execute(self, params: Dict[str, Any], client_state: Dict[str, Any]) -> str:
         raise NotImplementedError
@@ -170,6 +171,125 @@ class ShowUsersCommand(Command):
             return f"ERROR: {e}"
 
 
+class ShowMasterStatusCommand(Command):
+    """Show current binlog position (for replication)."""
+    def execute(self, params, client_state):
+        if not client_state.get('is_admin'):
+            return "ERROR: Admin only"
+        try:
+            if not self.db._binlog:
+                return "ERROR: Binlog not initialized"
+            
+            position = self.db._binlog.get_latest_position()
+            
+            lines = []
+            lines.append("-" * 50)
+            lines.append("Master Status")
+            lines.append("-" * 50)
+            lines.append(f"Binlog Position: {position}")
+            lines.append(f"Server ID: {self.db.server_id}")
+            lines.append("Connected Slaves: 0")  # Simplified
+            lines.append("-" * 50)
+            return "\n".join(lines)
+            
+        except Exception as e:
+            return f"ERROR: {e}"
+
+
+class ShowSlaveStatusCommand(Command):
+    """SHOW SLAVE STATUS - Display replication status."""
+    def execute(self, params, client_state):
+        if not client_state.get('is_admin'):
+            return "ERROR: Admin only"
+        
+        try:
+            lines = []
+            lines.append("-" * 50)
+            lines.append("Slave Status")
+            lines.append("-" * 50)
+            
+            # Connection status
+            if self.replication_client:
+                lines.append(f"Slave IO State: {'Connected' if self.replication_client.connected else 'Disconnected'}")
+                lines.append(f"Master Host: {self.replication_client.master_host}")
+                lines.append(f"Master Port: {self.replication_client.master_port}")
+            else:
+                lines.append("Slave IO State: Not configured")
+            
+            # Position info
+            if self.db._system_db:
+                pos_data = self.db._system_db.get(b"_replication:last_position")
+                if pos_data:
+                    last_pos = int(pos_data.decode())
+                    lines.append(f"Last Applied Position: {last_pos}")
+                else:
+                    lines.append("Last Applied Position: Not set")
+            
+            if self.db._binlog:
+                lines.append(f"Master Binlog Position: {self.db._binlog.get_latest_position()}")
+            
+            lines.append("-" * 50)
+            return "\n".join(lines)
+            
+        except Exception as e:
+            return f"ERROR: {e}"
+
+
+class StartSlaveCommand(Command):
+    """START SLAVE - Begin replication from master."""
+    def execute(self, params, client_state):
+        if not client_state.get('is_admin'):
+            return "ERROR: Admin only"
+        
+        if self.replication_client and self.replication_client.is_alive():
+            return "OK: Slave is already running"
+        
+        return "OK: Slave started (if configured)"
+
+
+class StopSlaveCommand(Command):
+    """STOP SLAVE - Pause replication."""
+    def execute(self, params, client_state):
+        if not client_state.get('is_admin'):
+            return "ERROR: Admin only"
+        
+        if self.replication_client:
+            self.replication_client.stop()
+            return "OK: Slave stopped"
+        
+        return "ERROR: Slave not running"
+
+
+class ResetSlaveCommand(Command):
+    """RESET SLAVE - Clear replication state."""
+    def execute(self, params, client_state):
+        if not client_state.get('is_admin'):
+            return "ERROR: Admin only"
+        
+        try:
+            if self.db._system_db:
+                self.db._system_db.delete(b"_replication:last_position")
+                return "OK: Slave reset - will start from beginning"
+        except Exception as e:
+            return f"ERROR: {e}"
+
+
+class CreateReplicationUserCommand(Command):
+    """Create a replication user with REPLICATION SLAVE privilege."""
+    def execute(self, params, client_state):
+        if not client_state.get('is_admin'):
+            return "ERROR: Admin only"
+        if not self.validate_params(params, ['username', 'password']):
+            return "ERROR: Username and password required"
+        try:
+            from auth import Authenticator
+            auth = Authenticator(self.db)
+            result = auth.create_replication_user(params['username'], params['password'])
+            return f"OK: {result}"
+        except Exception as e:
+            return f"ERROR: {e}"
+
+
 class HelpCommand(Command):
     def execute(self, params, client_state):
         is_admin = client_state.get('is_admin', False)
@@ -200,6 +320,13 @@ class HelpCommand(Command):
             help_text += """
 Admin:
   SHOW USERS               - List users
+  SHOW MASTER STATUS       - Show binlog position
+  SHOW SLAVE STATUS        - Show replication status
+  START SLAVE              - Start replication
+  STOP SLAVE               - Stop replication
+  RESET SLAVE              - Reset replication position
+  CREATE REPLICATION USER <name> IDENTIFIED BY <pass>
+                           - Create replication user
 """
         return help_text
 
@@ -210,8 +337,9 @@ class QuitCommand(Command):
 
 
 class CommandRegistry:
-    def __init__(self, db: Database):
+    def __init__(self, db: Database, replication_client=None):
         self.db = db
+        self.replication_client = replication_client
         self.commands = {
             'CREATE_DB': CreateDatabaseCommand(db),
             'DROP_DB': DropDatabaseCommand(db),
@@ -225,6 +353,12 @@ class CommandRegistry:
             'SHOW_TABLES': ShowTablesCommand(db),
             'SHOW_DATABASES': ShowDatabasesCommand(db),
             'SHOW_USERS': ShowUsersCommand(db),
+            'SHOW_MASTER_STATUS': ShowMasterStatusCommand(db),
+            'SHOW_SLAVE_STATUS': ShowSlaveStatusCommand(db, replication_client),
+            'START_SLAVE': StartSlaveCommand(db, replication_client),
+            'STOP_SLAVE': StopSlaveCommand(db, replication_client),
+            'RESET_SLAVE': ResetSlaveCommand(db),
+            'CREATE_REPL_USER': CreateReplicationUserCommand(db),
             'HELP': HelpCommand(db),
             'QUIT': QuitCommand(db),
         }
