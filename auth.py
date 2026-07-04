@@ -1,46 +1,87 @@
-"""Authentication module for the socket server."""
+"""
+Authentication module using database-backed user management
+"""
 
 import hashlib
 import secrets
+from typing import Dict, Set, List, Optional, Tuple
+from database import Database
 
 
 class Authenticator:
-    """Simple authenticator with session management."""
+    """Database-backed authentication with privilege checking"""
     
-    VALID_CREDENTIALS = {
-        'admin': 'skrlat'
-    }
+    def __init__(self, db: Database):
+        self.db = db
+        self.active_sessions: Dict[str, Dict] = {}  # token -> user_info
     
-    def __init__(self):
-        self.active_sessions = set()
-    
-    def authenticate(self, username: str, password: str) -> bool:
+    def authenticate(self, username: str, password: str) -> Tuple[bool, Optional[str], Optional[Dict]]:
         """
-        Validate credentials.
+        Authenticate user against database.
         
-        Args:
-            username: Username to validate
-            password: Password to validate
-            
         Returns:
-            True if authentication successful, False otherwise
+            Tuple of (success, session_token, user_info)
         """
-        if username in self.VALID_CREDENTIALS:
-            return self.VALID_CREDENTIALS[username] == password
-        return False
-    
-    def generate_token(self) -> str:
-        """Generate a secure session token."""
-        return secrets.token_hex(16)
-    
-    def create_session(self, token: str) -> None:
-        """Mark a token as an active session."""
-        self.active_sessions.add(token)
+        success, is_admin, privileges = self.db.authenticate_user(username, password)
+        
+        if not success:
+            return False, None, None
+        
+        # Create session
+        token = secrets.token_hex(16)
+        user_info = {
+            "username": username,
+            "is_admin": is_admin,
+            "privileges": privileges
+        }
+        self.active_sessions[token] = user_info
+        
+        return True, token, user_info
     
     def validate_session(self, token: str) -> bool:
-        """Check if a session token is valid."""
+        """Check if session token is valid."""
         return token in self.active_sessions
     
-    def remove_session(self, token: str) -> None:
-        """Remove a session token."""
-        self.active_sessions.discard(token)
+    def get_user_info(self, token: str) -> Optional[Dict]:
+        """Get user info from session token."""
+        return self.active_sessions.get(token)
+    
+    def end_session(self, token: str):
+        """End a session."""
+        if token in self.active_sessions:
+            del self.active_sessions[token]
+    
+    def check_privilege(self, token: str, db_name: str, table_name: str, 
+                       required_priv: str) -> bool:
+        """Check if user has required privilege."""
+        user_info = self.get_user_info(token)
+        if not user_info:
+            return False
+        
+        username = user_info["username"]
+        is_admin = user_info.get("is_admin", False)
+        
+        # Admins have all privileges
+        if is_admin:
+            return True
+        
+        # Check database privileges
+        return self.db.check_privilege(username, db_name, table_name, required_priv)
+    
+    def has_db_access(self, token: str, db_name: str) -> bool:
+        """Check if user has any access to database."""
+        return self.check_privilege(token, db_name, "*", "CONNECT")
+    
+    def has_table_access(self, token: str, db_name: str, table_name: str, 
+                         operation: str) -> bool:
+        """Check if user can perform operation on table."""
+        priv_map = {
+            "SELECT": "SELECT",
+            "INSERT": "INSERT",
+            "UPDATE": "UPDATE",
+            "DELETE": "DELETE",
+            "CREATE": "CREATE",
+            "DROP": "DROP"
+        }
+        required_priv = priv_map.get(operation, operation)
+        return self.check_privilege(token, db_name, table_name, required_priv)

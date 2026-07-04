@@ -1,6 +1,5 @@
 """
 SQL-like Command Parser for LevelDB Socket Server
-Parses MySQL-like commands into structured operations
 """
 
 import re
@@ -25,7 +24,9 @@ class CommandParser:
                 re.IGNORECASE
             ),
             'SELECT': re.compile(
-                r'^\s*SELECT\s+(?P<columns>[\w\s*,]+)\s+FROM\s+(?P<table>\w+)(?:\s+WHERE\s+(?P<where>.+))?\s*$',
+                r'^\s*SELECT\s+(?P<columns>[\w\s*,]+)\s+FROM\s+(?P<table>\w+)'
+                r'(?:\s+WHERE\s+(?P<where>.+?))?'
+                r'(?:\s+ORDER\s+BY\s+(?P<order_by>\w+)(?:\s+(?P<order_dir>ASC|DESC))?)?\s*$',
                 re.IGNORECASE
             ),
             'UPDATE': re.compile(
@@ -52,6 +53,10 @@ class CommandParser:
                 r'^\s*SHOW\s+TABLES\s*$',
                 re.IGNORECASE
             ),
+            'SHOW_DATABASES': re.compile(
+                r'^\s*SHOW\s+DATABASES\s*$',
+                re.IGNORECASE
+            ),
             'HELP': re.compile(
                 r'^\s*HELP\s*$',
                 re.IGNORECASE
@@ -63,12 +68,7 @@ class CommandParser:
         }
     
     def parse(self, command: str) -> Tuple[str, Optional[Dict[str, Any]]]:
-        """
-        Parse a command string into (command_type, parameters)
-        
-        Returns:
-            Tuple of (command_type, params_dict) or ('UNKNOWN', None) if not recognized
-        """
+        """Parse a command string into (command_type, parameters)"""
         command = command.strip()
         
         # Check for special commands first
@@ -78,6 +78,8 @@ class CommandParser:
             return 'QUIT', {}
         if command.upper() == 'SHOW TABLES':
             return 'SHOW_TABLES', {}
+        if command.upper() == 'SHOW DATABASES':
+            return 'SHOW_DATABASES', {}
         
         # Try to match patterns
         for cmd_type, pattern in self.patterns.items():
@@ -100,6 +102,10 @@ class CommandParser:
                 # Parse WHERE clause
                 if 'where' in params and params['where']:
                     params['where'] = self._parse_where_clause(params['where'])
+                
+                # Parse ORDER BY
+                if 'order_by' in params:
+                    params['order_desc'] = params.get('order_dir', 'ASC').upper() == 'DESC'
                 
                 return cmd_type, params
         
@@ -134,7 +140,6 @@ class CommandParser:
         if current.strip():
             values.append(current.strip())
         
-        # Convert numeric strings to numbers
         result = []
         for v in values:
             v = v.strip()
@@ -159,14 +164,12 @@ class CommandParser:
                 col = col.strip()
                 val = val.strip()
                 
-                # Try to convert to number
                 try:
                     if '.' in val:
                         result[col] = float(val)
                     else:
                         result[col] = int(val)
                 except ValueError:
-                    # Remove quotes if present
                     if (val.startswith("'") and val.endswith("'")) or \
                        (val.startswith('"') and val.endswith('"')):
                         val = val[1:-1]
@@ -177,8 +180,6 @@ class CommandParser:
     def _parse_where_clause(self, where_str: str) -> Dict[str, Any]:
         """Parse WHERE clause into conditions"""
         conditions = {}
-        
-        # Simple parsing for key=value conditions
         parts = [p.strip() for p in where_str.split('AND')]
         
         for part in parts:
@@ -187,45 +188,15 @@ class CommandParser:
                 col = col.strip()
                 val = val.strip()
                 
-                # Try to convert to number
                 try:
                     if '.' in val:
                         conditions[col] = float(val)
                     else:
                         conditions[col] = int(val)
                 except ValueError:
-                    # Remove quotes if present
                     if (val.startswith("'") and val.endswith("'")) or \
                        (val.startswith('"') and val.endswith('"')):
                         val = val[1:-1]
                     conditions[col] = val
         
         return conditions
-
-
-if __name__ == '__main__':
-    # Test the parser
-    parser = CommandParser()
-    
-    test_commands = [
-        "CREATE TABLE users (id INT, name TEXT)",
-        "INSERT INTO users VALUES (1, 'Alice')",
-        "SELECT * FROM users",
-        "SELECT name, age FROM users WHERE id=1",
-        "UPDATE users SET name='Bob' WHERE id=1",
-        "DELETE FROM users WHERE id=1",
-        "DROP TABLE users",
-        "CREATE DATABASE testdb",
-        "USE testdb",
-        "DROP DATABASE testdb",
-        "SHOW TABLES",
-        "HELP",
-        "QUIT",
-    ]
-    
-    for cmd in test_commands:
-        cmd_type, params = parser.parse(cmd)
-        print(f"Command: {cmd}")
-        print(f"  Type: {cmd_type}")
-        print(f"  Params: {params}")
-        print()

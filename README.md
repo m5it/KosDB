@@ -41,11 +41,14 @@ Format: USER <username>, then PASS <password>
 --------------------------------------------------
 
 USER admin
-PASS skrlat
-```
-
-### Available Commands
-
+| Command | Description |
+|---------|-------------|
+| `SHOW DATABASES` | List all databases |
+| `CREATE DATABASE <name>` | Create a new database |
+| `DROP DATABASE <name>` | Delete a database |
+| `USE <database>` | Select database to use |
+| `SHOW TABLES` | List tables in current database |
+| `CREATE TABLE <name> (cols...)` | Create a new table |
 | Command | Description |
 |---------|-------------|
 | `CREATE DATABASE <name>` | Create a new database |
