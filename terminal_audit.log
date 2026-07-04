@@ -1,1 +1,34 @@
 [2026-07-02 05:22:37] CMD: cat /tmp/.plan_1782968431.5510702.json | SUCCESS: True | OUTPUT_LEN: 75
+[2026-07-02 23:53:31] CMD: python server.py | SUCCESS: True | OUTPUT_LEN: 409
+[2026-07-02 23:53:31] CMD: pkill -f python server.py | SUCCESS: False | OUTPUT_LEN: 0
+[2026-07-02 23:54:01] CMD: python3 server.py | SUCCESS: True | OUTPUT_LEN: 350
+[2026-07-02 23:54:01] CMD: bash -c sleep 2 && echo Server started successfully | SUCCESS: True | OUTPUT_LEN: 74
+[2026-07-02 23:56:00] CMD: python3 server.py | SUCCESS: True | OUTPUT_LEN: 350
+[2026-07-02 23:56:06] CMD: python3 -c import plyvel; print(plyvel version:, plyvel.__version__) | SUCCESS: True | OUTPUT_LEN: 112
+[2026-07-02 23:56:06] CMD: which python3 | SUCCESS: False | OUTPUT_LEN: 0
+[2026-07-02 23:56:06] CMD: python3 -m pip list | grep plyvel | SUCCESS: True | OUTPUT_LEN: 321
+[2026-07-03 00:17:35] CMD: python3 -c from database import Database; db = Database(); print(list_databases:, hasattr(db, list_databases)) | SUCCESS: True | OUTPUT_LEN: 81
+[2026-07-03 00:17:35] CMD: python3 -c from commands import CommandRegistry; from database import Database; db = Database(); reg = CommandRegistry(db); print(SHOW_DATABASES:, SHOW_DATABASES in reg.commands) | SUCCESS: True | OUTPUT_LEN: 81
+[2026-07-03 00:17:35] CMD: python3 -c from parser import CommandParser; p = CommandParser(); print(p.parse(SHOW DATABASES)) | SUCCESS: True | OUTPUT_LEN: 81
+[2026-07-03 00:17:43] CMD: python3 server.py | SUCCESS: True | OUTPUT_LEN: 457
+[2026-07-03 00:17:43] CMD: bash -c sleep 3 && echo Server test complete | SUCCESS: True | OUTPUT_LEN: 74
+[2026-07-03 00:18:15] CMD: python3 server.py | SUCCESS: True | OUTPUT_LEN: 350
+[2026-07-03 00:18:15] CMD: bash -c sleep 2 | SUCCESS: True | OUTPUT_LEN: 74
+[2026-07-03 00:38:26] CMD: python3 -c from parser import CommandParser; p = CommandParser(); print("SHOW DATABASES:", p.parse("SHOW DATABASES")); print("SHOW TABLES:", p.parse("SHOW TABLES")) | SUCCESS: True | OUTPUT_LEN: 72
+[2026-07-03 02:47:31] CMD: python3 -c from commands import CommandRegistry; from database import Database; db = Database(); reg = CommandRegistry(db); print("Commands:", list(reg.commands.keys())) | SUCCESS: True | OUTPUT_LEN: 594
+[2026-07-03 02:53:39] CMD: python3 -c from parser import CommandParser; p = CommandParser(); print(p.parse("SELECT * FROM users ORDER BY name DESC")) | SUCCESS: True | OUTPUT_LEN: 408
+[2026-07-03 02:53:39] CMD: python3 -c from database import Database; db = Database(); print("create_table:", db.create_table("test", ["id PRIMARY KEY", "name INDEX", "age"])); print("insert:", db.insert("test", [1, "Alice", 30])); print("insert:", db.insert("test", [2, "Bob", 25])); print("select:", db.select("test", order_by="name")) | SUCCESS: True | OUTPUT_LEN: 577
+[2026-07-03 02:55:04] CMD: python3 -c from parser import CommandParser; p = CommandParser(); print("ORDER BY:", p.parse("SELECT * FROM users ORDER BY name DESC")) | SUCCESS: True | OUTPUT_LEN: 135
+[2026-07-03 02:55:04] CMD: python3 -c from database import Database; db = Database(); print("create_table:", db.create_table("test", ["id PRIMARY KEY", "name INDEX", "age"])); print("insert:", db.insert("test", [1, "Charlie", 30])); print("insert:", db.insert("test", [2, "Alice", 25])); print("insert:", db.insert("test", [3, "Bob", 35])); print("select by name:", db.select("test", order_by="name")) | SUCCESS: True | OUTPUT_LEN: 653
+[2026-07-03 23:48:56] CMD: python3 server.py --help | SUCCESS: True | OUTPUT_LEN: 174
+[2026-07-03 23:48:56] CMD: python3 server.py --prepare_admin admin --prepare_password skrlat | SUCCESS: True | OUTPUT_LEN: 174
+[2026-07-03 23:49:40] CMD: python3 server.py --help | SUCCESS: True | OUTPUT_LEN: 322
+[2026-07-03 23:49:40] CMD: python3 server.py --prepare_admin admin --prepare_password skrlat | SUCCESS: True | OUTPUT_LEN: 322
+[2026-07-03 23:49:48] CMD: python3 server.py --help | SUCCESS: True | OUTPUT_LEN: 322
+[2026-07-04 00:08:40] CMD: pwd     | SUCCESS: True | OUTPUT_LEN: 121
+[2026-07-04 00:08:42] CMD: pwd | SUCCESS: True | OUTPUT_LEN: 63
+[2026-07-04 00:08:45] CMD: .venv/bin/python server.py --prepare_admin admin --prepare_password | SUCCESS: False | OUTPUT_LEN: 0
+[2026-07-04 00:08:48] CMD: python3 server.py --prepare_admin admin --prepare_password | SUCCESS: True | OUTPUT_LEN: 350
+[2026-07-04 00:08:50] CMD: pip install plyvel | SUCCESS: False | OUTPUT_LEN: 0
+[2026-07-04 00:08:54] CMD: bash -c source .venv/bin/activate && python server.py --prepare_admin admin --prepare_password skrlat | SUCCESS: True | OUTPUT_LEN: 92
+[2026-07-04 00:08:57] CMD: bash -c python3 -m py_compile database.py commands.py server.py && echo "Syntax OK" | SUCCESS: True | OUTPUT_LEN: 10
