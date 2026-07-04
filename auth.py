@@ -85,3 +85,35 @@ class Authenticator:
         }
         required_priv = priv_map.get(operation, operation)
         return self.check_privilege(token, db_name, table_name, required_priv)
+    
+    def is_replication_user(self, token: str) -> bool:
+        """Check if user has REPLICATION SLAVE privilege."""
+        user_info = self.get_user_info(token)
+        if not user_info:
+            return False
+        
+        username = user_info["username"]
+        is_admin = user_info.get("is_admin", False)
+        
+        if is_admin:
+            return True
+        
+        # Check for REPLICATION_SLAVE privilege
+        privileges = self.db._get_user_privileges(username)
+        for priv in privileges:
+            if "REPLICATION_SLAVE" in priv.get("privs", []):
+                return True
+        
+        return False
+    
+    def create_replication_user(self, username: str, password: str) -> str:
+        """Create a replication user with REPLICATION SLAVE privilege."""
+        # Create the user first
+        result = self.db.create_user(username, password, is_admin=False)
+        if "already exists" in result:
+            return result
+        
+        # Grant REPLICATION SLAVE privilege
+        result2 = self.db.grant_privilege(username, "*", "*", ["REPLICATION_SLAVE"])
+        
+        return f"Replication user '{username}' created with REPLICATION SLAVE privilege"

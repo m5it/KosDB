@@ -6,19 +6,23 @@ import hashlib
 import secrets
 import plyvel
 from typing import Optional, Dict, Any, List
+from binlog import Binlog
 
 
 class Database:
     """Wrapper for LevelDB providing MySQL-like database operations with auth."""
     
-    def __init__(self, data_dir: str = "data"):
+    def __init__(self, data_dir: str = "data", server_id: int = 1):
         self.data_dir = data_dir
         self.db_path = data_dir
+        self.server_id = server_id
         self.current_db: Optional[str] = None
         self._db: Optional[plyvel.DB] = None
         self._system_db: Optional[plyvel.DB] = None  # For users/privileges
+        self._binlog: Optional[Binlog] = None
         self._ensure_data_dir()
         self._open_system_db()
+        self._open_binlog()
     
     def _ensure_data_dir(self):
         """Ensure data directory exists."""
@@ -29,6 +33,10 @@ class Database:
         """Open system database for users and privileges."""
         system_db_path = os.path.join(self.data_dir, "_system")
         self._system_db = plyvel.DB(system_db_path, create_if_missing=True)
+    
+    def _open_binlog(self):
+        """Open binary log for replication."""
+        self._binlog = Binlog(self.data_dir)
     
     def _ensure_system_tables(self):
         """Ensure system tables for users and privileges exist."""
@@ -73,6 +81,16 @@ class Database:
         
         db = plyvel.DB(db_path, create_if_missing=True)
         db.close()
+        
+        # Log to binlog
+        if self._binlog:
+            self._binlog.write_entry(
+                server_id=self.server_id,
+                database=db_name,
+                operation="CREATE_DB",
+                data={"db_name": db_name}
+            )
+        
         return f"Database '{db_name}' created successfully"
     
     def drop_database(self, db_name: str) -> str:
@@ -88,6 +106,16 @@ class Database:
         
         import shutil
         shutil.rmtree(db_path)
+        
+        # Log to binlog
+        if self._binlog:
+            self._binlog.write_entry(
+                server_id=self.server_id,
+                database=db_name,
+                operation="DROP_DB",
+                data={"db_name": db_name}
+            )
+        
         return f"Database '{db_name}' dropped successfully"
     
     def use_database(self, db_name: str) -> str:
@@ -144,6 +172,16 @@ class Database:
             idx_key = f"_index:{table_name}:{idx_col}".encode()
             self._db.put(idx_key, json.dumps({}).encode())
         
+        # Log to binlog
+        if self._binlog:
+            self._binlog.write_entry(
+                server_id=self.server_id,
+                database=self.current_db or "",
+                operation="CREATE_TABLE",
+                table=table_name,
+                data={"table_name": table_name, "columns": parsed_columns, "primary_key": primary_key, "indexes": index_columns}
+            )
+        
         return f"Table '{table_name}' created"
     
     def drop_table(self, table_name: str) -> str:
@@ -160,6 +198,17 @@ class Database:
             self._db.delete(key)
         
         self._db.delete(schema_key)
+        
+        # Log to binlog
+        if self._binlog:
+            self._binlog.write_entry(
+                server_id=self.server_id,
+                database=self.current_db or "",
+                operation="DROP_TABLE",
+                table=table_name,
+                data={"table_name": table_name}
+            )
+        
         return f"Table '{table_name}' dropped"
     
     def insert(self, table_name: str, values: List[Any]) -> str:
@@ -194,6 +243,16 @@ class Database:
         if not primary_key:
             schema["next_id"] += 1
             self._db.put(schema_key, json.dumps(schema).encode())
+        
+        # Log to binlog
+        if self._binlog:
+            self._binlog.write_entry(
+                server_id=self.server_id,
+                database=self.current_db or "",
+                operation="INSERT",
+                table=table_name,
+                data={"row": row}
+            )
         
         return f"Inserted 1 row into '{table_name}'"
     
@@ -337,6 +396,7 @@ class Database:
         
         schema = json.loads(schema_data.decode())
         updated = 0
+        updated_rows = []
         prefix = f"{table_name}:".encode()
         
         for key, value in self._db.iterator(prefix=prefix):
@@ -367,7 +427,18 @@ class Database:
             if old_key_val is not None and primary_key:
                 self._update_indexes(table_name, row, str(row[primary_key]), schema)
             
+            updated_rows.append(row.copy())
             updated += 1
+        
+        # Log to binlog
+        if self._binlog and updated_rows:
+            self._binlog.write_entry(
+                server_id=self.server_id,
+                database=self.current_db or "",
+                operation="UPDATE",
+                table=table_name,
+                data={"set_clause": set_clause, "where": where, "updated_rows": updated_rows}
+            )
         
         return f"Updated {updated} row(s) in '{table_name}'"
     
@@ -383,6 +454,7 @@ class Database:
         
         deleted = 0
         keys_to_delete = []
+        deleted_rows = []
         prefix = f"{table_name}:".encode()
         
         for key, value in self._db.iterator(prefix=prefix):
@@ -401,10 +473,21 @@ class Database:
                     continue
             
             keys_to_delete.append(key)
+            deleted_rows.append(row.copy())
         
         for key in keys_to_delete:
             self._db.delete(key)
             deleted += 1
+        
+        # Log to binlog
+        if self._binlog and deleted_rows:
+            self._binlog.write_entry(
+                server_id=self.server_id,
+                database=self.current_db or "",
+                operation="DELETE",
+                table=table_name,
+                data={"where": where, "deleted_rows": deleted_rows}
+            )
         
         return f"Deleted {deleted} row(s) from '{table_name}'"
     
@@ -450,6 +533,9 @@ class Database:
         if self._system_db:
             self._system_db.close()
             self._system_db = None
+        if self._binlog:
+            self._binlog.close()
+            self._binlog = None
     
     def list_databases(self) -> List[str]:
         """List all databases in the data directory."""
