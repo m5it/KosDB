@@ -5,7 +5,7 @@ A threaded Python socket server providing a MySQL-like command interface over Le
 ## Features
 
 - **Threaded TCP Socket Server** - Handles multiple concurrent clients
-- **Authentication** - Simple username/password (admin/skrlat)
+- **Authentication** - 
 - **LevelDB Backend** - Persistent key-value storage with table namespacing
 - **SQL-like Commands** - CREATE, DROP, INSERT, SELECT, UPDATE, DELETE
 - **Netcat Compatible** - Test with standard netcat client
@@ -21,6 +21,7 @@ pip install -r requirements.txt
 ### Start the Server
 
 ```bash
+python server.py --prepare_admin admin --prepare_password yourpwd
 python server.py
 ```
 
@@ -133,7 +134,6 @@ Default settings in `server.py`:
 - Host: 0.0.0.0
 - Port: 9999
 - Database: ./data.db
-- Auth: admin / skrlat
 
 ## License
 
