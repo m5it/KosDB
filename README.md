@@ -23,8 +23,8 @@ A high-performance, distributed database system built on LevelDB with support fo
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/leveldb-socket-server.git
-cd leveldb-socket-server
+git clone https://github.com/m5it/KosDB.git
+cd KosDB
 
 # Install dependencies
 pip install -r requirements.txt
@@ -32,6 +32,10 @@ pip install -r requirements.txt
 # Or install as package
 pip install -e .
 ```
+
+### Start the Server
+
+```bash
 python server.py --data-dir ./data --port 5555
 ```
 
@@ -177,6 +181,73 @@ Node 2 (192.168.1.2):
 python server.py --node-id node2 --raft-port 9000 --peers node1:192.168.1.1:9000,node3:192.168.1.3:9000
 ```
 
+Node 3 (192.168.1.3):
+```bash
+python server.py --node-id node3 --raft-port 9000 --peers node1:192.168.1.1:9000,node2:192.168.1.2:9000
+```
+
+## Monitoring
+
+### Prometheus Endpoint
+
+Metrics are exposed at `http://localhost:9090/metrics`
+
+Key metrics:
+- `queries_total` - Total queries executed
+- `queries_duration_seconds` - Query latency histogram
+- `system_cpu_percent` - CPU usage
+- `system_memory_rss_bytes` - Memory usage
+- `connections_total` - Connection count
+
+### Health Checks
+
+Check health at `http://localhost:9090/health`
+
+## Testing
+
+Run integration tests:
+
+```bash
+python -m pytest tests/ -v
+```
+
+Run specific test:
+
+```bash
+python -m pytest tests/test_transactions.py -v
+```
+
+## Performance
+
+Benchmark results on a typical server:
+- Single-node: ~50,000 ops/sec
+- With replication: ~40,000 ops/sec
+- Distributed transactions: ~5,000 tx/sec
+
+## Security
+
+- All connections use TCP with optional TLS
+- Password-based authentication
+- Role-based access control (admin/user)
+- Replication user with limited privileges
+
+## Troubleshooting
+
+### Connection Refused
+- Check server is running: `python server.py --status`
+- Verify firewall rules
+- Check port availability
+
+### Replication Lag
+- Check network latency between nodes
+- Monitor binlog size
+- Consider increasing batch size
+
+### Failover Issues
+- Verify Raft ports are accessible
+- Check node connectivity: `FAILOVER STATUS`
+- Review logs for election timeouts
+
 ## What's New in v1.0.0
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
@@ -237,7 +308,7 @@ MIT License - See [LICENSE](LICENSE) file for details
 
 ## Contributing
 
-1. Fork the repository
+1. Fork the repository (`https://github.com/m5it/KosDB/fork`)
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
 3. Add tests for new functionality
 4. Commit your changes (`git commit -m 'Add amazing feature'`)
@@ -248,9 +319,10 @@ Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduc
 
 ## Support
 
-- 📖 Documentation: https://leveldb-server.readthedocs.io
-- 🐛 Issues: https://github.com/yourusername/leveldb-server/issues
-- 💬 Discussions: https://github.com/yourusername/leveldb-server/discussions
+- 📖 Documentation: https://kosdb.readthedocs.io
+- 🐛 Issues: https://github.com/m5it/KosDB/issues
+- 💬 Discussions: https://github.com/m5it/KosDB/discussions
+- 📧 Email: w4d4f4k@gmail.com
 
 ## Acknowledgments
 
@@ -263,71 +335,3 @@ Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduc
 <p align="center">
   Made with ❤️ by the Development Team
 </p>
-- Distributed transactions: ~5,000 tx/sec
-
-## Security
-
-- All connections use TCP with optional TLS
-- Password-based authentication
-- Role-based access control (admin/user)
-- Replication user with limited privileges
-
-## Troubleshooting
-
-### Connection Refused
-- Check server is running: `python server.py --status`
-- Verify firewall rules
-- Check port availability
-
-### Replication Lag
-- Check network latency between nodes
-- Monitor binlog size
-- Consider increasing batch size
-
-### Failover Issues
-- Verify Raft ports are accessible
-- Check node connectivity: `FAILOVER STATUS`
-- Review logs for election timeouts
-
-## Development
-
-### Project Structure
-
-```
-.
-├── server.py           # Main server entry point
-├── cli.py             # Command-line client
-├── database.py        # Database operations
-├── commands.py        # Command handlers
-├── parser.py          # SQL parser
-├── auth.py            # Authentication
-├── replication.py     # Replication system
-├── distributed_tx.py  # Distributed transactions
-├── failover.py        # Raft failover
-├── monitoring.py      # Metrics and health
-└── tests/             # Test suite
-```
-
-### Adding New Commands
-
-1. Add pattern to `parser.py`
-2. Implement command in `commands.py`
-3. Register in `CommandRegistry`
-4. Add tests
-
-## License
-
-MIT License - See LICENSE file for details
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Submit a pull request
-
-## Support
-
-- GitHub Issues: https://github.com/m5it/KosDB/issues
-- Documentation: https://kosdb.readthedocs.io
-- Email: w4d4f4k@gmail.com
