@@ -112,13 +112,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Version 2.0.0
 - [ ] SQL compatibility layer
-- [ ] Stored procedures
-- [ ] Triggers and events
-- [ ] Views and materialized views
-
-## Contributors
-
 - Initial implementation by the Development Team
+
+## Links
+
+- Repository: https://github.com/m5it/KosDB
+- Issues: https://github.com/m5it/KosDB/issues
+- Documentation: https://kosdb.readthedocs.io
 
 ## License
 
