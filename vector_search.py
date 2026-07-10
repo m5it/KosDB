@@ -3,7 +3,7 @@ Vector Similarity Search for KosDB
 
 Implements vector storage and similarity search using embeddings
 for semantic queries. Supports cosine similarity, Euclidean distance,
-and approximate nearest neighbor search.
+and approximate nearest neighbor search. Includes optional GPU acceleration.
 """
 
 import math
@@ -11,19 +11,30 @@ import json
 import heapq
 import struct
 import random
+import logging
 from typing import Dict, Any, List, Optional, Tuple, Callable, Union
 from enum import Enum, auto
 from dataclasses import dataclass, field
 from collections import defaultdict
 import threading
 
+# Try to import GPU acceleration
+try:
+    from gpu_vector_search import GPUVectorIndex, GPUSearchEngine, GPU_AVAILABLE
+    GPU_SUPPORT = True
+except ImportError:
+    GPU_SUPPORT = False
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
 
 class DistanceMetric(Enum):
     """Distance metrics for vector comparison."""
-    COSINE = auto()      # Cosine similarity (1 - cosine distance)
-    EUCLIDEAN = auto()   # L2 distance
-    DOT_PRODUCT = auto() # Dot product similarity
-    MANHATTAN = auto()   # L1 distance
+    COSINE = auto()
+    EUCLIDEAN = auto()
+    DOT_PRODUCT = auto()
+    MANHATTAN = auto()
 
 
 @dataclass
@@ -49,19 +60,81 @@ class VectorIndex:
     """
     In-memory vector index for similarity search.
     Supports brute-force and approximate search methods.
+    Automatically uses GPU acceleration when available and beneficial.
     """
     
-    def __init__(self, dimension: int, metric: DistanceMetric = DistanceMetric.COSINE):
+    # Threshold for automatic GPU selection
+    GPU_THRESHOLD = 1000
+    
+    def __init__(self, dimension: int, metric: DistanceMetric = DistanceMetric.COSINE,
+                 use_gpu: Optional[bool] = None):
+        """
+        Initialize vector index.
+        
+        Args:
+            dimension: Vector dimension
+            metric: Distance metric
+            use_gpu: Whether to use GPU (None=auto, True=force GPU, False=force CPU)
+        """
         self.dimension = dimension
         self.metric = metric
         self._documents: Dict[str, VectorDocument] = {}
         self._lock = threading.RLock()
+        
+        # GPU configuration
+        self._use_gpu_preference = use_gpu
+        self._gpu_index: Optional[Any] = None
         
         # For IVF (Inverted File Index)
         self._n_clusters = 0
         self._centroids: List[List[float]] = []
         self._inverted_lists: Dict[int, List[str]] = defaultdict(list)
         self._is_trained = False
+        
+        # Initialize GPU if forced
+        if use_gpu is True and GPU_SUPPORT:
+            self._init_gpu_index()
+    
+    def _init_gpu_index(self):
+        """Initialize GPU-accelerated index."""
+        if not GPU_SUPPORT:
+            logger.warning("GPU acceleration requested but not available")
+            return
+        
+        try:
+            self._gpu_index = GPUVectorIndex(
+                dimension=self.dimension,
+                metric=self.metric,
+                use_gpu=True
+            )
+            logger.info(f"[VectorSearch] GPU acceleration enabled for dimension {self.dimension}")
+        except Exception as e:
+            logger.error(f"[VectorSearch] Failed to initialize GPU: {e}")
+            self._gpu_index = None
+    
+    def _should_use_gpu(self, n_vectors: int) -> bool:
+        """
+        Determine if GPU should be used based on configuration and vector count.
+        
+        Args:
+            n_vectors: Number of vectors to process
+        
+        Returns:
+            True if GPU should be used
+        """
+        # Check explicit preference
+        if self._use_gpu_preference is False:
+            return False
+        if self._use_gpu_preference is True:
+            return GPU_SUPPORT and self._gpu_index is not None
+        
+        # Auto mode: use GPU for large batches
+        if n_vectors >= self.GPU_THRESHOLD and GPU_SUPPORT:
+            if self._gpu_index is None:
+                self._init_gpu_index()
+            return self._gpu_index is not None
+        
+        return False
     
     def add(self, doc_id: str, vector: List[float], 
             metadata: Optional[Dict[str, Any]] = None) -> bool:
@@ -88,6 +161,13 @@ class VectorIndex:
         with self._lock:
             self._documents[doc_id] = doc
             
+            # Add to GPU index if active
+            if self._gpu_index:
+                try:
+                    self._gpu_index.add(doc_id, vector, metadata)
+                except Exception as e:
+                    logger.warning(f"[VectorSearch] Failed to add to GPU index: {e}")
+            
             # Add to inverted list if using IVF
             if self._is_trained and self._n_clusters > 0:
                 cluster_id = self._assign_to_cluster(vector)
@@ -112,6 +192,10 @@ class VectorIndex:
             doc = self._documents[doc_id]
             del self._documents[doc_id]
             
+            # Remove from GPU index
+            if self._gpu_index:
+                self._gpu_index.remove(doc_id)
+            
             # Remove from inverted list
             if self._is_trained:
                 cluster_id = self._assign_to_cluster(doc.vector)
@@ -124,6 +208,7 @@ class VectorIndex:
                filter_fn: Optional[Callable[[VectorDocument], bool]] = None) -> List[Tuple[str, float]]:
         """
         Search for k nearest neighbors.
+        Automatically uses GPU for large datasets when available.
         
         Args:
             query_vector: Query embedding
@@ -137,11 +222,36 @@ class VectorIndex:
             raise ValueError(f"Expected dimension {self.dimension}, got {len(query_vector)}")
         
         with self._lock:
-            # Use IVF if trained, otherwise brute force
+            n_vectors = len(self._documents)
+            
+            # Check if we should use GPU
+            if self._should_use_gpu(n_vectors) and not filter_fn:
+                # Use GPU-accelerated search
+                if self._gpu_index:
+                    # Sync documents to GPU index if needed
+                    self._sync_to_gpu()
+                    return self._gpu_index.search(query_vector, k)
+            
+            # Use CPU implementation
             if self._is_trained and self._n_clusters > 0:
                 return self._ivf_search(query_vector, k, filter_fn)
             else:
                 return self._brute_force_search(query_vector, k, filter_fn)
+    
+    def _sync_to_gpu(self):
+        """Sync documents to GPU index."""
+        if not self._gpu_index:
+            return
+        
+        # Check if GPU index has all documents
+        gpu_count = len(self._gpu_index._documents)
+        cpu_count = len(self._documents)
+        
+        if gpu_count < cpu_count:
+            # Add missing documents to GPU
+            for doc_id, doc in self._documents.items():
+                if doc_id not in self._gpu_index._documents:
+                    self._gpu_index.add(doc_id, doc.vector, doc.metadata)
     
     def _brute_force_search(self, query_vector: List[float], k: int,
                            filter_fn: Optional[Callable] = None) -> List[Tuple[str, float]]:
@@ -294,28 +404,41 @@ class VectorIndex:
         return distances.index(min(distances))
     
     def get_stats(self) -> Dict[str, Any]:
-        """Get index statistics."""
+        """Get index statistics including GPU info."""
         with self._lock:
-            return {
+            stats = {
                 'dimension': self.dimension,
                 'metric': self.metric.name,
                 'num_documents': len(self._documents),
                 'num_clusters': self._n_clusters,
-                'is_trained': self._is_trained
+                'is_trained': self._is_trained,
+                'gpu_accelerated': self._gpu_index is not None,
+                'use_gpu_preference': self._use_gpu_preference
             }
+            return stats
 
 
 class VectorSearchEngine:
     """
     High-level vector search engine with multiple indexes.
+    Supports GPU acceleration configuration.
     """
     
-    def __init__(self):
+    def __init__(self, use_gpu: Optional[bool] = None):
+        """
+        Initialize search engine.
+        
+        Args:
+            use_gpu: Global GPU setting (None=auto, True=force, False=disable)
+        """
         self._indexes: Dict[str, VectorIndex] = {}
         self._lock = threading.RLock()
+        self._global_use_gpu = use_gpu
+        self._gpu_stats = {'cpu_searches': 0, 'gpu_searches': 0}
     
     def create_index(self, name: str, dimension: int,
-                     metric: DistanceMetric = DistanceMetric.COSINE) -> VectorIndex:
+                     metric: DistanceMetric = DistanceMetric.COSINE,
+                     use_gpu: Optional[bool] = None) -> VectorIndex:
         """
         Create new vector index.
         
@@ -323,6 +446,7 @@ class VectorSearchEngine:
             name: Index name
             dimension: Vector dimension
             metric: Distance metric
+            use_gpu: GPU setting (None=inherit from engine)
         
         Returns:
             Created index
@@ -331,7 +455,20 @@ class VectorSearchEngine:
             if name in self._indexes:
                 raise ValueError(f"Index {name} already exists")
             
-            index = VectorIndex(dimension, metric)
+            # Determine GPU setting
+            gpu_setting = use_gpu if use_gpu is not None else self._global_use_gpu
+            
+            # Use GPU index if available and requested
+            if gpu_setting is True and GPU_SUPPORT:
+                try:
+                    index = GPUVectorIndex(dimension, metric, use_gpu=True)
+                    logger.info(f"[VectorSearch] Created GPU-accelerated index: {name}")
+                except Exception as e:
+                    logger.warning(f"[VectorSearch] GPU index failed, using CPU: {e}")
+                    index = VectorIndex(dimension, metric, use_gpu=False)
+            else:
+                index = VectorIndex(dimension, metric, use_gpu=gpu_setting)
+            
             self._indexes[name] = index
             return index
     
@@ -409,6 +546,41 @@ class VectorSearchEngine:
                 enriched.append((doc_id, score, doc.metadata))
         
         return enriched
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Get engine statistics including GPU usage."""
+        with self._lock:
+            stats = {
+                'num_indexes': len(self._indexes),
+                'gpu_available': GPU_SUPPORT,
+                'global_use_gpu': self._global_use_gpu,
+                'search_stats': self._gpu_stats.copy(),
+                'indexes': {}
+            }
+            
+            for name, index in self._indexes.items():
+                idx_stats = index.get_stats()
+                stats['indexes'][name] = idx_stats
+                
+                # Track GPU vs CPU usage
+                if idx_stats.get('gpu_accelerated'):
+                    self._gpu_stats['gpu_searches'] += 1
+                else:
+                    self._gpu_stats['cpu_searches'] += 1
+            
+            return stats
+    
+    def get_gpu_stats(self) -> Dict[str, Any]:
+        """Get GPU-specific statistics."""
+        return {
+            'gpu_available': GPU_SUPPORT,
+            'global_setting': self._global_use_gpu,
+            'search_counts': self._gpu_stats.copy(),
+            'indexes_using_gpu': sum(
+                1 for idx in self._indexes.values() 
+                if idx._gpu_index is not None
+            )
+        }
 
 
 class EmbeddingGenerator:
@@ -430,7 +602,6 @@ class EmbeddingGenerator:
             Embedding vector
         """
         # Simple hash-based embedding for demo
-        # In production, use sentence-transformers or similar
         random.seed(hash(text) % (2**32))
         return [random.gauss(0, 1) for _ in range(self.dimension)]
     
@@ -515,6 +686,22 @@ class SemanticSearcher:
             }
             for doc_id, score, metadata in results
         ]
+
+
+def create_vector_search_engine(use_gpu: Optional[bool] = None) -> VectorSearchEngine:
+    """
+    Factory function to create a vector search engine.
+    
+    Args:
+        use_gpu: GPU setting (None=auto, True=force, False=disable)
+    
+    Returns:
+        Configured VectorSearchEngine
+    """
+    if use_gpu is True and not GPU_SUPPORT:
+        logger.warning("GPU acceleration requested but not available. Using CPU.")
+    
+    return VectorSearchEngine(use_gpu=use_gpu)
 
 
 # Utility functions

@@ -1,426 +1,415 @@
-# KosDB - Distributed Database System
+# KosDB v3.1.0
 
-[![Version](https://img.shields.io/badge/version-3.0.0-blue.svg)](CHANGELOG.md)
-[![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-
-A high-performance, distributed database system built on LevelDB with support for replication, transactions, failover, monitoring, and advanced features including vector similarity search and schema migrations.
+A high-performance, feature-rich LevelDB-based database server with SQL-like interface, replication, TLS encryption, GPU acceleration, and comprehensive audit logging.
 
 ## Features
 
 ### Core Database
-- **Socket-based Protocol**: Fast binary protocol over TCP
-- **ACID Transactions**: Full transaction support with BEGIN/COMMIT/ROLLBACK
-- **Distributed Transactions**: Two-Phase Commit (2PC) for multi-node consistency
-- **Master-Slave Replication**: Asynchronous replication with binlog
-- **Automatic Failover**: Raft consensus for leader election
+- **SQL-like Interface**: Familiar CREATE, INSERT, SELECT, UPDATE, DELETE commands
+- **Multiple Databases**: Support for multiple named databases
+- **Table Schema**: Define columns with types (INT, TEXT, FLOAT, etc.)
+- **Transactions**: ACID-compliant operations
+- **Indexing**: Primary and secondary index support
 
-### Advanced Features (v3.0)
-- **🔌 Agent Protocol** - Inter-agent communication with capability registry and task delegation
-- **⚡ Command Parser** - Full SQL parser with statement validation and parameter extraction
-- **🛡️ Input Validation** - Schema-based validation with type checking and sanitization
-- **💾 Session Recovery** - Persistent sessions with automatic recovery and integrity checking
-- **⚙️ Query Optimizer** - Cost-based execution planning with index advisor
-- **📊 Concurrent Index** - Online index building without blocking reads/writes
-- **🌊 Streaming Results** - Progressive result streaming for large datasets
-- **📈 Metrics & Monitoring** - Prometheus-compatible metrics with health checks
-- **📝 Write-Ahead Log** - Durable transaction logging with ARIES recovery
-- **🔄 Schema Migration** - Versioned schema changes with rollback support
-- **🔍 Vector Search** - Semantic similarity search using embeddings
+### Security (New in v3.1.0)
+- **TLS/SSL Encryption**: Secure client-server communication
+  - Certificate-based authentication
+  - Self-signed certificate generation
+  - Client certificate verification (mTLS)
+- **At-Rest Encryption**: AES-256-GCM database encryption
+  - PBKDF2 key derivation
+  - Master key rotation support
+- **Audit Logging**: Comprehensive operation logging
+  - Multiple output targets (file, syslog, webhook)
+  - Log rotation and compression
+  - Sensitive command masking
 
-### Operations
-- **Backup & Restore**: Compressed JSON backups with integrity checking
-- **Schema Migrations**: Versioned database migrations with rollback
-- **Vector Search**: AI-powered semantic search with multiple distance metrics
+### Authentication & Authorization
+- **Database-backed Authentication**: Username/password with bcrypt hashing
+- **Role-Based Access Control (RBAC)**: Create roles and assign to users
+- **Granular Permissions**: SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, ADMIN
+- **Column-level Security**: Restrict access to specific columns
+- **Session Management**: JWT-based sessions with TTL
+
+### Replication & High Availability
+- **Master-Slave Replication**: Automatic failover support
+- **Master-Master Replication**: Multi-master with conflict resolution
+- **Async Replication**: Non-blocking replication
+- **Replication Lag Monitoring**: Track replication health
+
+### Performance Features
+- **GPU Acceleration**: CUDA-powered query processing
+  - Vector operations
+  - Matrix multiplication
+  - Sorting algorithms
+- **Connection Pooling**: Efficient connection management
+- **Query Caching**: Result cache for frequent queries
+- **Compression**: Multiple algorithms (gzip, lz4, zstd)
+
+### Backup & Recovery
+- **Hot Backups**: Non-blocking backup operations
+- **Encrypted Backups**: Password-protected backup files
+- **Compression Options**: gzip, lz4, zstd
+- **Point-in-Time Recovery**: Restore to specific timestamp
+- **Integrity Verification**: SHA-256 checksums
 
 ## Quick Start
 
 ### Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/m5it/KosDB.git
-cd KosDB
+# Clone repository
+git clone https://github.com/yourusername/kosdb.git
+cd kosdb
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Or install as package
-pip install -e .
+# Optional: Install GPU support
+pip install pycuda  # For CUDA acceleration
+
+# Optional: Install encryption
+pip install cryptography  # For TLS and at-rest encryption
 ```
 
-### Start the Server
+### Basic Usage
 
 ```bash
-python server.py --data-dir ./data --port 5555
+# Start server with default config
+python server.py
+
+# Or specify configuration file
+python server.py -c config.json
+
+# Create admin user
+python server.py --prepare_admin admin --prepare_password secret123
 ```
 
-### Connect with CLI
+### Client Connection
 
 ```bash
-python cli.py -H localhost -P 5555 -u admin -p secret
+# Connect with CLI client
+python cli.py -H localhost -p 9999 -u admin -P secret123
+
+# Or use with TLS
+python cli.py -H localhost -p 9999 --tls --ca-cert ca.crt -u admin -P secret123
 ```
-
-## Architecture
-
-```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   CLI Client    │────▶│  Socket Server  │────▶│    LevelDB      │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-                               │
-        ┌─────────┬─────────┬─────────┬─────────┬─────────┐
-        ▼         ▼         ▼         ▼         ▼         ▼
-   ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐
-   │ Agent  │ │ Query  │ │Stream  │ │Vector  │ │Schema  │ │Metrics │
-   │Protocol│ │Optimize│ │Results │ │ Search │ │Migrate │ │        │
-   └────────┘ └────────┘ └────────┘ └────────┘ └────────┘ └────────┘
-```
-
-## Commands
-
-### Database Operations
-- `CREATE DATABASE <name>` - Create a new database
-- `DROP DATABASE <name>` - Delete a database
-- `USE <database>` - Select current database
-- `SHOW DATABASES` - List all databases
-
-### Table Operations
-- `CREATE TABLE <name> (col1, col2, ...)` - Create table
-- `DROP TABLE <name>` - Delete table
-- `SHOW TABLES` - List tables in current database
-
-### Data Operations
-- `INSERT INTO <table> VALUES (v1, v2, ...)` - Insert row
-- `SELECT * FROM <table> [WHERE ...] [ORDER BY ...]` - Query data
-- `UPDATE <table> SET col=v WHERE ...` - Update rows
-- `DELETE FROM <table> WHERE ...` - Delete rows
-
-### Transactions
-- `BEGIN` - Start transaction
-- `COMMIT` - Commit transaction
-- `ROLLBACK` - Rollback transaction
-
-### Vector Search (New in v3.0)
-- `CREATE VECTOR INDEX <name> ON <table> (column)` - Create vector index
-- `VECTOR SEARCH <index> WITH <query> [K <n>]` - Semantic search
-- `VECTOR ADD <index> <id> <text>` - Add document to index
-- `VECTOR DELETE <index> <id>` - Remove from index
-
-### Schema Migration (New in v3.0)
-- `MIGRATE CREATE <description>` - Create new migration
-- `MIGRATE UP` - Apply pending migrations
-- `MIGRATE DOWN` - Rollback last migration
-- `MIGRATE STATUS` - Show migration status
-
-### Backup & Restore
-- `BACKUP DATABASE <db> TO <file>` - Backup database
-- `RESTORE DATABASE <db> FROM <file>` - Restore database
-- `BACKUP TABLE <t> TO <file>` - Backup single table
-- `SHOW BACKUPS [path]` - List backups
-- `VERIFY BACKUP <file>` - Check integrity
-
-### Distributed Transactions
-- `DIST_TX_BEGIN <ops_json>` - Start distributed transaction
-- `DIST_TX_STATUS <tx_id>` - Check transaction status
-- `DIST_TX_LIST` - List all distributed transactions
-
-### Failover & Clustering
-- `FAILOVER STATUS` - Show cluster status
-- `FAILOVER PROPOSE <cmd>` - Propose command through Raft
-
-### Monitoring
-- `METRICS` - Show system metrics
-- `HEALTH` - Run health checks
-- `PROMETHEUS` - Export Prometheus format
-
-### Replication (Admin)
-- `SHOW MASTER STATUS` - Show binlog position
-- `SHOW SLAVE STATUS` - Show replication status
-- `START SLAVE` - Start replication
-- `STOP SLAVE` - Stop replication
-- `RESET SLAVE` - Reset replication
 
 ## Configuration
 
-### Server Configuration
-
-Create `config.json`:
+### Basic Configuration (config.json)
 
 ```json
 {
+  "version": "3.1.0",
   "server": {
     "host": "0.0.0.0",
-    "port": 5555,
-    "data_dir": "./data",
-    "max_connections": 100
+    "port": 9999,
+    "data_dir": "./data"
   },
-  "replication": {
-    "enabled": true,
-    "role": "master",
-    "slaves": [
-      {"host": "slave1.example.com", "port": 5555}
-    ]
-  },
-  "failover": {
-    "enabled": true,
-    "node_id": "node1",
-    "peers": [
-      {"id": "node2", "host": "192.168.1.2", "port": 9000},
-      {"id": "node3", "host": "192.168.1.3", "port": 9000}
-    ]
-  },
-  "monitoring": {
-    "enabled": true,
-    "http_port": 9090
-  },
-  "vector_search": {
-    "enabled": true,
-    "default_dimension": 384,
-    "metric": "cosine"
-  },
-  "migrations": {
-    "directory": "./migrations",
-    "auto_apply": false
+  "database": {
+    "engine": "leveldb",
+    "compression": true
   }
 }
 ```
 
-## New Features in v3.0
+### TLS Configuration
 
-### 🔍 Vector Similarity Search
-```sql
--- Create a vector index for semantic search
-CREATE VECTOR INDEX articles_idx ON articles (content);
-
--- Add documents
-VECTOR ADD articles_idx 1 "Python is a programming language";
-VECTOR ADD articles_idx 2 "Machine learning uses neural networks";
-
--- Search semantically
-VECTOR SEARCH articles_idx WITH "programming languages" K 5;
+```json
+{
+  "tls": {
+    "enabled": true,
+    "cert_file": "/etc/kosdb/server.crt",
+    "key_file": "/etc/kosdb/server.key",
+    "ca_file": "/etc/kosdb/ca.crt",
+    "client_auth": true
+  }
+}
 ```
 
-### 🔄 Schema Migrations
-```bash
-# Create a migration
-python -m kosdb migrate create "Add users table"
+### Audit Logging Configuration
 
-# Apply migrations
-python -m kosdb migrate up
-
-# Rollback
-python -m kosdb migrate down
-
-# Check status
-python -m kosdb migrate status
+```json
+{
+  "audit_logging": {
+    "enabled": true,
+    "log_dir": "./audit_logs",
+    "max_size_mb": 100,
+    "max_age_days": 30,
+    "targets": ["file", "syslog"],
+    "exclude_commands": ["PING"],
+    "mask_commands": ["PASS", "PASSWORD"]
+  }
+}
 ```
 
-### ⚙️ Query Optimization
-```sql
--- Get execution plan
-EXPLAIN SELECT * FROM users WHERE age > 25;
+### GPU Configuration
 
--- Get index recommendations
-ANALYZE TABLE users;
+```json
+{
+  "gpu": {
+    "enabled": true,
+    "device_id": 0,
+    "memory_fraction": 0.8,
+    "kernels": ["vector_ops", "matrix_mult", "sort"]
+  }
+}
 ```
 
-### 🌊 Streaming Results
-```python
-# Stream large results without memory issues
-for chunk in db.stream_query("SELECT * FROM large_table"):
-    process(chunk)
-```
+See [Configuration Guide](README_CONFIG.md) for complete documentation.
 
-## Replication Setup
+## SQL Commands
 
-### 1. Configure Master
-
-```bash
-python server.py --role master --binlog-dir ./binlog
-```
-
-### 2. Create Replication User
+### Database Operations
 
 ```sql
-CREATE REPLICATION USER replicator IDENTIFIED BY 'secret';
+-- Create database
+CREATE DATABASE mydb;
+
+-- Use database
+USE mydb;
+
+-- Drop database
+DROP DATABASE mydb;
 ```
 
-### 3. Configure Slave
+### Table Operations
 
-```bash
-python server.py --role slave --master-host master.example.com --master-port 5555 --repl-user replicator --repl-pass secret
+```sql
+-- Create table
+CREATE TABLE users (
+    id INT PRIMARY KEY,
+    name TEXT,
+    email TEXT,
+    age INT
+);
+
+-- Describe table
+DESCRIBE users;
+
+-- Drop table
+DROP TABLE users;
 ```
 
-## Failover Setup
+### Data Operations
 
-### 3-Node Cluster Example
+```sql
+-- Insert
+INSERT INTO users VALUES (1, 'Alice', 'alice@example.com', 30);
 
-Node 1 (192.168.1.1):
-```bash
-python server.py --node-id node1 --raft-port 9000 --peers node2:192.168.1.2:9000,node3:192.168.1.3:9000
+-- Select
+SELECT * FROM users;
+SELECT name, email FROM users WHERE age > 25;
+SELECT * FROM users WHERE name LIKE 'A%';
+
+-- Update
+UPDATE users SET age = 31 WHERE id = 1;
+
+-- Delete
+DELETE FROM users WHERE id = 1;
 ```
 
-Node 2 (192.168.1.2):
-```bash
-python server.py --node-id node2 --raft-port 9000 --peers node1:192.168.1.1:9000,node3:192.168.1.3:9000
+### User Management
+
+```sql
+-- Create user
+CREATE USER alice PASSWORD 'secret123';
+
+-- Grant privileges
+GRANT SELECT, INSERT ON mydb.users TO alice;
+
+-- Revoke privileges
+REVOKE DELETE ON mydb.users FROM alice;
+
+-- Show grants
+SHOW GRANTS FOR alice;
 ```
 
-Node 3 (192.168.1.3):
+### Role Management
+
+```sql
+-- Create role
+CREATE ROLE readonly DESCRIPTION 'Read-only access';
+
+-- Grant privileges to role
+GRANT SELECT ON *.* TO readonly;
+
+-- Assign role to user
+GRANT ROLE readonly TO alice;
+
+-- Show roles
+SHOW ROLES;
+```
+
+### Backup Operations
+
+```sql
+-- Backup with encryption
+BACKUP DATABASE mydb TO /backups/mydb.backup WITH ENCRYPTION 'mypassword' COMPRESSION gzip;
+
+-- Restore with encryption
+RESTORE DATABASE mydb FROM /backups/mydb.backup WITH ENCRYPTION 'mypassword';
+```
+
+## Environment Variables
+
+Sensitive configuration values can be stored in environment variables:
+
 ```bash
-python server.py --node-id node3 --raft-port 9000 --peers node1:192.168.1.1:9000,node2:192.168.1.2:9000
+# Encryption passphrase
+export KOSDB_ENCRYPTION_PASSPHRASE="my-secret-key"
+
+# TLS certificate password
+export KOSDB_TLS_PASSWORD="cert-password"
+
+# Backup encryption
+export KOSDB_BACKUP_PASSPHRASE="backup-secret"
+
+# JWT secret
+export KOSDB_JWT_SECRET="jwt-signing-key"
+```
+
+Reference in config.json:
+```json
+{
+  "database": {
+    "encryption": {
+      "passphrase_env": "KOSDB_ENCRYPTION_PASSPHRASE"
+    }
+  }
+}
+```
+
+## Security Hardening
+
+### TLS Setup
+
+1. Generate CA and server certificates:
+```bash
+# Generate CA
+openssl req -x509 -newkey rsa:4096 -keyout ca.key -out ca.crt -days 365 -nodes
+
+# Generate server certificate
+openssl req -newkey rsa:4096 -keyout server.key -out server.csr -nodes
+openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out server.crt -days 365
+```
+
+2. Configure server:
+```json
+{
+  "tls": {
+    "enabled": true,
+    "cert_file": "server.crt",
+    "key_file": "server.key",
+    "ca_file": "ca.crt",
+    "client_auth": false
+  }
+}
+```
+
+3. Connect client with TLS:
+```bash
+python cli.py --tls --ca-cert ca.crt -u admin -P secret123
+```
+
+### Encryption Best Practices
+
+1. **Use strong passphrases** (minimum 16 characters)
+2. **Store keys securely** (use key files with restricted permissions)
+3. **Rotate keys regularly** (use `ROTATE KEY` command)
+4. **Backup keys separately** from encrypted data
+5. **Enable audit logging** for encryption operations
+
+## Performance Tuning
+
+### GPU Acceleration
+
+Enable GPU for large-scale operations:
+```json
+{
+  "gpu": {
+    "enabled": true,
+    "device_id": 0,
+    "memory_fraction": 0.8
+  }
+}
+```
+
+GPU-accelerated operations:
+- Vector mathematical operations
+- Matrix multiplication
+- Large dataset sorting
+- Aggregate functions
+
+### Connection Pooling
+
+```json
+{
+  "performance": {
+    "connection_pool_min": 5,
+    "connection_pool_max": 20,
+    "query_cache_size": 1000
+  }
+}
 ```
 
 ## Monitoring
 
-### Prometheus Endpoint
-
-Metrics are exposed at `http://localhost:9090/metrics`
-
-Key metrics:
-- `queries_total` - Total queries executed
-- `queries_duration_seconds` - Query latency histogram
-- `system_cpu_percent` - CPU usage
-- `system_memory_rss_bytes` - Memory usage
-- `connections_total` - Connection count
-- `vector_search_latency_seconds` - Vector search latency
-- `migration_duration_seconds` - Migration timing
-
-### Health Checks
-
-Check health at `http://localhost:9090/health`
-
-## Testing
-
-Run integration tests:
+### Health Check
 
 ```bash
-python -m pytest tests/ -v
+# Check server health
+python cli.py -c "SHOW STATUS"
 ```
 
-Run specific test:
+### Metrics
 
-```bash
-python -m pytest tests/test_vector_search.py -v
+Enable Prometheus metrics:
+```json
+{
+  "monitoring": {
+    "enabled": true,
+    "metrics_port": 9090,
+    "prometheus_enabled": true
+  }
+}
 ```
 
-## Performance
+Access metrics at `http://localhost:9090/metrics`
 
-Benchmark results on a typical server:
-- Single-node: ~50,000 ops/sec
-- With replication: ~40,000 ops/sec
-- Distributed transactions: ~5,000 tx/sec
-- Vector search (brute force): ~1,000 queries/sec
-- Vector search (IVF): ~10,000 queries/sec
+## Troubleshooting
 
-## Security
+### Connection Issues
 
-- All connections use TCP with optional TLS
-- Password-based authentication
-- Role-based access control (admin/user)
-- Replication user with limited privileges
-- Input validation and SQL injection protection
+- Verify server is running: `python cli.py -c "PING"`
+- Check firewall rules for port 9999
+- Verify TLS certificates are valid
 
-## What's New in v3.0.0
+### Performance Issues
 
-See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
+- Check query cache hit rate
+- Monitor replication lag
+- Review slow query log
 
-### Highlights
-- ✅ **Agent Protocol** - Inter-agent communication with capability registry
-- ✅ **Command Parser** - Full SQL parser with validation
-- ✅ **Input Validation** - Schema-based validation and sanitization
-- ✅ **Session Recovery** - Persistent sessions with automatic recovery
-- ✅ **Query Optimizer** - Cost-based execution planning
-- ✅ **Concurrent Index** - Online index building
-- ✅ **Streaming Results** - Progressive result streaming
-- ✅ **Metrics & Monitoring** - Prometheus-compatible metrics
-- ✅ **Write-Ahead Log** - Durable transaction logging
-- ✅ **Distributed Transactions** - Two-Phase Commit (2PC)
-- ✅ **Schema Migration** - Versioned schema changes with rollback
-- ✅ **Vector Search** - Semantic similarity search with embeddings
+### Encryption Issues
 
-## Development
+- Verify passphrase is correct
+- Check key file permissions (should be 600)
+- Ensure cryptography library is installed
 
-### Project Structure
+## API Reference
 
-```
-.
-├── server.py              # Main server entry point
-├── cli.py                # Command-line client
-├── database.py           # Database operations
-├── commands.py           # Command handlers
-├── parser.py             # SQL parser
-├── auth.py               # Authentication
-├── replication.py        # Replication system
-├── binlog.py             # Binary logging
-├── distributed_tx.py     # Distributed transactions
-├── failover.py           # Raft failover
-├── monitoring.py         # Metrics and health
-├── agent_protocol.py     # Agent communication
-├── command_parser.py     # SQL parsing
-├── validation.py         # Input validation
-├── session_recovery.py   # Session persistence
-├── query_optimizer.py    # Query optimization
-├── concurrent_index.py   # Online indexing
-├── streaming_results.py  # Result streaming
-├── metrics_monitoring.py # Metrics collection
-├── write_ahead_log.py    # WAL implementation
-├── schema_migration.py   # Schema migrations
-├── vector_search.py      # Vector similarity search
-├── tests/                # Test suite
-├── README.md             # This file
-├── CHANGELOG.md          # Release notes
-├── requirements.txt      # Dependencies
-└── setup.py             # Package setup
-```
-
-### Adding New Commands
-
-1. Add pattern to `parser.py`
-2. Implement command in `commands.py`
-3. Register in `CommandRegistry`
-4. Add tests in `test_integration.py`
-
-## Version History
-
-- **v3.0.0** (2026-01-09) - Major release with 12 advanced features
-- **v1.0.0** (2026-01-09) - Initial release with core features
-
-## Roadmap
-
-- **v3.1.0** - TLS encryption, query caching improvements, GPU-accelerated vector search
-- **v3.2.0** - Multi-region replication, automatic sharding, vector quantization
-- **v4.0.0** - SQL compatibility layer, stored procedures, triggers
-
-## License
-
-MIT License - See [LICENSE](LICENSE) file for details
+See [API Documentation](docs/API.md) for detailed command reference.
 
 ## Contributing
 
-1. Fork the repository (`https://github.com/m5it/KosDB/fork`)
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Add tests for new functionality
-4. Commit your changes (`git commit -m 'Add amazing feature'`)
-5. Push to the branch (`git push origin feature/amazing-feature`)
-6. Open a Pull Request
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
 
-Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and development process.
+## License
 
-## Support
+MIT License - see [LICENSE](LICENSE) for details.
 
-- 📖 Documentation: https://kosdb.readthedocs.io
-- 🐛 Issues: https://github.com/m5it/KosDB/issues
-- 💬 Discussions: https://github.com/m5it/KosDB/discussions
-- 📧 Email: w4d4f4k@gmail.com
+## Changelog
 
-## Acknowledgments
-
-- LevelDB - Fast key-value storage library
-- Plyvel - Python LevelDB bindings
-- Raft consensus algorithm - Diego Ongaro and John Ousterhout
-
----
-
-<p align="center">
-  Made with ❤️ by the Development Team
-</p>
+See [CHANGELOG.md](CHANGELOG.md) for version history.

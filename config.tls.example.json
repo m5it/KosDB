@@ -1,0 +1,103 @@
+/**
+ * KosDB TLS Configuration Example
+ * 
+ * This configuration demonstrates secure TLS setup for production use.
+ * Copy to config.json and customize for your environment.
+ */
+
+{
+  "version": "3.1.0",
+  "server": {
+    "host": "0.0.0.0",
+    "port": 9999,
+    "data_dir": "./data",
+    "server_id": 1,
+    "max_connections": 100,
+    "connection_timeout": 30,
+    "request_timeout": 60
+  },
+  "database": {
+    "engine": "leveldb",
+    "cache_size_mb": 64,
+    "write_buffer_mb": 16,
+    "compression": true,
+    "encryption": {
+      "enabled": true,
+      "key_file": "/etc/kosdb/encryption.key",
+      "passphrase_env": "KOSDB_ENCRYPTION_PASSPHRASE"
+    }
+  },
+  "tls": {
+    "enabled": true,
+    "cert_file": "/etc/kosdb/certs/server.crt",
+    "key_file": "/etc/kosdb/certs/server.key",
+    "ca_file": "/etc/kosdb/certs/ca.crt",
+    "generate_self_signed": false,
+    "client_auth": true,
+    "protocols": ["TLSv1.2", "TLSv1.3"],
+    "ciphers": "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384"
+  },
+  "audit_logging": {
+    "enabled": true,
+    "log_dir": "/var/log/kosdb/audit",
+    "max_size_mb": 500,
+    "max_age_days": 90,
+    "compress": true,
+    "targets": ["file", "syslog"],
+    "syslog_facility": "local0",
+    "webhook_url": null,
+    "webhook_headers": {},
+    "exclude_commands": ["PING", "ECHO"],
+    "mask_commands": ["PASS", "PASSWORD", "SECRET", "KEY", "TOKEN"]
+  },
+  "replication": {
+    "enabled": true,
+    "role": "master",
+    "master_host": null,
+    "replication_port": 9998,
+    "peer_host": null,
+    "sync_interval": 5,
+    "heartbeat_interval": 10,
+    "max_lag_seconds": 60
+  },
+  "authentication": {
+    "method": "database",
+    "jwt_secret_env": "KOSDB_JWT_SECRET",
+    "session_ttl_minutes": 60,
+    "max_failed_attempts": 5,
+    "lockout_duration_minutes": 30,
+    "rbac_enabled": true,
+    "default_roles": ["readonly", "readwrite", "admin"]
+  },
+  "backup": {
+    "enabled": true,
+    "backup_dir": "/backups/kosdb",
+    "auto_backup": true,
+    "backup_interval_hours": 24,
+    "retention_count": 30,
+    "compression": "gzip",
+    "compression_level": 6,
+    "encryption_passphrase_env": "KOSDB_BACKUP_PASSPHRASE"
+  },
+  "monitoring": {
+    "enabled": true,
+    "metrics_port": 9090,
+    "prometheus_enabled": true,
+    "health_check_interval": 30,
+    "slow_query_threshold_ms": 1000
+  },
+  "logging": {
+    "level": "INFO",
+    "format": "[%(asctime)s] %(levelname)s: %(message)s",
+    "file": "/var/log/kosdb/server.log",
+    "max_size_mb": 100,
+    "max_files": 10,
+    "console": true
+  },
+  "performance": {
+    "query_cache_size": 1000,
+    "connection_pool_min": 10,
+    "connection_pool_max": 50,
+    "worker_threads": 8
+  }
+}

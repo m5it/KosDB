@@ -1,0 +1,103 @@
+{
+  "version": "3.1.0",
+  "server": {
+    "host": "0.0.0.0",
+    "port": 9999,
+    "data_dir": "./data",
+    "server_id": 1,
+    "max_connections": 100,
+    "connection_timeout": 30,
+    "request_timeout": 60
+  },
+  "database": {
+    "engine": "leveldb",
+    "cache_size_mb": 64,
+    "write_buffer_mb": 16,
+    "compression": true,
+    "encryption": {
+      "enabled": false,
+      "key_file": null,
+      "passphrase_env": "KOSDB_ENCRYPTION_PASSPHRASE"
+    }
+  },
+  "tls": {
+    "enabled": false,
+    "cert_file": null,
+    "key_file": null,
+    "ca_file": null,
+    "generate_self_signed": false,
+    "client_auth": false,
+    "protocols": ["TLSv1.2", "TLSv1.3"],
+    "ciphers": "HIGH:!aNULL:!MD5"
+  },
+  "gpu": {
+    "enabled": false,
+    "device_id": 0,
+    "memory_fraction": 0.8,
+    "compute_capability": "auto",
+    "kernels": ["vector_ops", "matrix_mult", "sort"]
+  },
+  "audit_logging": {
+    "enabled": false,
+    "log_dir": "./audit_logs",
+    "max_size_mb": 100,
+    "max_age_days": 30,
+    "compress": true,
+    "targets": ["file"],
+    "syslog_facility": "local0",
+    "webhook_url": null,
+    "webhook_headers": {},
+    "exclude_commands": ["PING", "ECHO"],
+    "mask_commands": ["PASS", "PASSWORD", "SECRET"]
+  },
+  "replication": {
+    "enabled": false,
+    "role": "master",
+    "master_host": null,
+    "replication_port": null,
+    "peer_host": null,
+    "sync_interval": 5,
+    "heartbeat_interval": 10,
+    "max_lag_seconds": 60
+  },
+  "authentication": {
+    "method": "database",
+    "jwt_secret_env": "KOSDB_JWT_SECRET",
+    "session_ttl_minutes": 60,
+    "max_failed_attempts": 5,
+    "lockout_duration_minutes": 30,
+    "rbac_enabled": true,
+    "default_roles": ["read_only", "read_write", "admin"]
+  },
+  "backup": {
+    "enabled": true,
+    "backup_dir": "./backups",
+    "auto_backup": false,
+    "backup_interval_hours": 24,
+    "retention_count": 10,
+    "compression": "gzip",
+    "compression_level": 6,
+    "encryption_passphrase_env": "KOSDB_BACKUP_PASSPHRASE"
+  },
+  "monitoring": {
+    "enabled": false,
+    "metrics_port": 9090,
+    "prometheus_enabled": false,
+    "health_check_interval": 30,
+    "slow_query_threshold_ms": 1000
+  },
+  "logging": {
+    "level": "INFO",
+    "format": "[%(asctime)s] %(levelname)s: %(message)s",
+    "file": null,
+    "max_size_mb": 100,
+    "max_files": 5,
+    "console": true
+  },
+  "performance": {
+    "query_cache_size": 1000,
+    "connection_pool_min": 5,
+    "connection_pool_max": 20,
+    "worker_threads": 4
+  }
+}

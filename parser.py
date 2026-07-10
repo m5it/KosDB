@@ -1,22 +1,41 @@
 """
 SQL-like Command Parser for LevelDB Socket Server
+
+Supports parsing of various SQL-like commands for database operations.
 """
 
 import re
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Tuple, Optional, List
 
 
 class CommandParser:
-    """Parse SQL-like commands for LevelDB operations"""
+    """Parser for SQL-like commands."""
     
     def __init__(self):
+        # Initialize command patterns
         self.patterns = {
+            'CREATE_DB': re.compile(
+                r'^\s*CREATE\s+DATABASE\s+(?P<db_name>\w+)\s*$',
+                re.IGNORECASE
+            ),
+            'DROP_DB': re.compile(
+                r'^\s*DROP\s+DATABASE\s+(?P<db_name>\w+)\s*$',
+                re.IGNORECASE
+            ),
+            'USE': re.compile(
+                r'^\s*USE\s+(?P<db_name>\w+)\s*$',
+                re.IGNORECASE
+            ),
             'CREATE': re.compile(
-                r'^\s*CREATE\s+TABLE\s+(?P<table>\w+)(?:\s*\((?P<columns>[^)]+)\))?\s*$',
+                r'^\s*CREATE\s+TABLE\s+(?P<table>\w+)\s*\((?P<columns>[^)]+)\)\s*$',
                 re.IGNORECASE
             ),
             'DROP': re.compile(
                 r'^\s*DROP\s+TABLE\s+(?P<table>\w+)\s*$',
+                re.IGNORECASE
+            ),
+            'ALTER': re.compile(
+                r'^\s*ALTER\s+TABLE\s+(?P<table>\w+)\s+(?P<alter_spec>.+)$',
                 re.IGNORECASE
             ),
             'INSERT': re.compile(
@@ -24,327 +43,239 @@ class CommandParser:
                 re.IGNORECASE
             ),
             'SELECT': re.compile(
-                r'^\s*SELECT\s+(?P<columns>[\w\s*,]+)\s+FROM\s+(?P<table>\w+)'
-                r'(?:\s+WHERE\s+(?P<where>.+?))?'
-                r'(?:\s+ORDER\s+BY\s+(?P<order_by>\w+)(?:\s+(?P<order_dir>ASC|DESC))?)?\s*$',
+                r'^\s*SELECT\s+(?P<columns>[\w\s,]+)\s+FROM\s+(?P<table>\w+)(?:\s+WHERE\s+(?P<where>.+))?\s*$',
                 re.IGNORECASE
             ),
             'UPDATE': re.compile(
-                r'^\s*UPDATE\s+(?P<table>\w+)\s+SET\s+(?P<set>.+?)(?:\s+WHERE\s+(?P<where>.+))?\s*$',
+                r'^\s*UPDATE\s+(?P<table>\w+)\s+SET\s+(?P<set>[\w\s=,]+)(?:\s+WHERE\s+(?P<where>.+))?\s*$',
                 re.IGNORECASE
             ),
             'DELETE': re.compile(
                 r'^\s*DELETE\s+FROM\s+(?P<table>\w+)(?:\s+WHERE\s+(?P<where>.+))?\s*$',
                 re.IGNORECASE
             ),
-            'USE': re.compile(
-                r'^\s*USE\s+(?P<database>\w+)\s*$',
+            'SHOW': re.compile(
+                r'^\s*SHOW\s+(?P<target>DATABASES|TABLES|USERS)\s*$',
                 re.IGNORECASE
             ),
-            'CREATE_DB': re.compile(
-                r'^\s*CREATE\s+DATABASE\s+(?P<database>\w+)\s*$',
+            'DESCRIBE': re.compile(
+                r'^\s*DESCRIBE\s+(?P<table>\w+)\s*$',
                 re.IGNORECASE
             ),
-            'DROP_DB': re.compile(
-                r'^\s*DROP\s+DATABASE\s+(?P<database>\w+)\s*$',
+            'CREATE_USER': re.compile(
+                r'^\s*CREATE\s+USER\s+(?P<username>\w+)\s+PASSWORD\s+(?P<password>\S+)\s*$',
                 re.IGNORECASE
             ),
-            'SHOW_TABLES': re.compile(
-                r'^\s*SHOW\s+TABLES\s*$',
+            'DROP_USER': re.compile(
+                r'^\s*DROP\s+USER\s+(?P<username>\w+)\s*$',
                 re.IGNORECASE
             ),
-            'SHOW_DATABASES': re.compile(
-                r'^\s*SHOW\s+DATABASES\s*$',
+            'GRANT': re.compile(
+                r'^\s*GRANT\s+(?P<privileges>[\w\s,]+)\s+ON\s+(?P<db>\w+)\.(?P<table>\w+)\s+TO\s+(?P<username>\w+)\s*$',
                 re.IGNORECASE
             ),
-            'SHOW_USERS': re.compile(
-                r'^\s*SHOW\s+USERS\s*$',
+            'REVOKE': re.compile(
+                r'^\s*REVOKE\s+(?P<privileges>[\w\s,]+)\s+ON\s+(?P<db>\w+)\.(?P<table>\w+)\s+FROM\s+(?P<username>\w+)\s*$',
                 re.IGNORECASE
             ),
-            'SHOW_MASTER_STATUS': re.compile(
-                r'^\s*SHOW\s+MASTER\s+STATUS\s*$',
+            'CREATE_ROLE': re.compile(
+                r'^\s*CREATE\s+ROLE\s+(?P<role_name>\w+)(?:\s+DESCRIPTION\s+(?P<description>\'[^\']*\'|\"[^\"]*\"))?\s*$',
                 re.IGNORECASE
             ),
-            'SHOW_SLAVE_STATUS': re.compile(
-                r'^\s*SHOW\s+SLAVE\s+STATUS\s*$',
+            'DROP_ROLE': re.compile(
+                r'^\s*DROP\s+ROLE\s+(?P<role_name>\w+)\s*$',
                 re.IGNORECASE
             ),
-            'START_SLAVE': re.compile(
-                r'^\s*START\s+SLAVE\s*$',
+            'GRANT_ROLE': re.compile(
+                r'^\s*GRANT\s+ROLE\s+(?P<role_name>\w+)\s+TO\s+(?P<username>\w+)\s*$',
                 re.IGNORECASE
             ),
-            'STOP_SLAVE': re.compile(
-                r'^\s*STOP\s+SLAVE\s*$',
+            'REVOKE_ROLE': re.compile(
+                r'^\s*REVOKE\s+ROLE\s+(?P<role_name>\w+)\s+FROM\s+(?P<username>\w+)\s*$',
                 re.IGNORECASE
             ),
-            'RESET_SLAVE': re.compile(
-                r'^\s*RESET\s+SLAVE\s*$',
+            'SHOW_GRANTS': re.compile(
+                r'^\s*SHOW\s+GRANTS(?:\s+FOR\s+(?P<username>\w+))?\s*$',
                 re.IGNORECASE
             ),
-            'CREATE_REPL_USER': re.compile(
-                r'^\s*CREATE\s+REPLICATION\s+USER\s+["\']?(?P<username>\w+)["\']?\s+IDENTIFIED\s+BY\s+["\']?(?P<password>[^"\s]+)["\']?\s*$',
+            'SHOW_ROLES': re.compile(
+                r'^\s*SHOW\s+ROLES\s*$',
                 re.IGNORECASE
             ),
-            'HELP': re.compile(
-                r'^\s*HELP\s*$',
-                re.IGNORECASE
-            ),
-            'QUIT': re.compile(
-                r'^\s*(?:QUIT|EXIT)\s*$',
+            'AUDIT_LOG': re.compile(
+                r'^\s*AUDIT\s+LOG(?:\s+LIMIT\s+(?P<limit>\d+))?(?:\s+USER\s+(?P<user>\w+))?(?:\s+ACTION\s+(?P<action>\w+))?\s*$',
                 re.IGNORECASE
             ),
         }
     
-    def parse(self, command: str) -> Tuple[str, Optional[Dict[str, Any]]]:
-        """Parse a command string into (command_type, parameters)"""
-        command = command.strip()
+    def parse(self, sql: str) -> Tuple[str, Dict[str, Any]]:
+        """
+        Parse SQL-like command and return command type and parameters.
         
-        # Check for special commands first
-        if command.upper() == 'HELP':
-            return 'HELP', {}
-        if command.upper() in ('QUIT', 'EXIT'):
-            return 'QUIT', {}
-        if command.upper() == 'SHOW TABLES':
-            return 'SHOW_TABLES', {}
-        if command.upper() == 'SHOW DATABASES':
-            return 'SHOW_DATABASES', {}
-        if command.upper() == 'SHOW USERS':
-            return 'SHOW_USERS', {}
-        if command.upper() == 'SHOW MASTER STATUS':
-            return 'SHOW_MASTER_STATUS', {}
-        if command.upper() == 'SHOW SLAVE STATUS':
-            return 'SHOW_SLAVE_STATUS', {}
-        if command.upper() == 'START SLAVE':
-            return 'START_SLAVE', {}
-        if command.upper() == 'STOP SLAVE':
-            return 'STOP_SLAVE', {}
-        if command.upper() == 'RESET SLAVE':
-            return 'RESET_SLAVE', {}
+        Args:
+            sql: SQL command string
         
-        # Try to match patterns
+        Returns:
+            Tuple of (command_type, parameters_dict)
+        """
+        sql = sql.strip()
+        
+        # Try each pattern
         for cmd_type, pattern in self.patterns.items():
-            match = pattern.match(command)
+            match = pattern.match(sql)
             if match:
                 params = match.groupdict()
                 
-                # Parse columns if present
+                # Parse special fields
                 if 'columns' in params and params['columns']:
                     params['columns'] = [c.strip() for c in params['columns'].split(',')]
                 
-                # Parse values if present
                 if 'values' in params and params['values']:
                     params['values'] = self._parse_values(params['values'])
                 
-                # Parse SET clause for UPDATE
-                if 'set' in params and params['set']:
-                    params['set'] = self._parse_set_clause(params['set'])
+                if 'privileges' in params and params['privileges']:
+                    params['privileges'] = [p.strip().upper() for p in params['privileges'].split(',')]
                 
-                # Parse WHERE clause
-                if 'where' in params and params['where']:
-                    params['where'] = self._parse_where_clause(params['where'])
+                if 'description' in params and params['description']:
+                    # Remove quotes
+                    params['description'] = params['description'].strip('\'"')
                 
-                # Parse ORDER BY
-                if 'order_by' in params:
-                    params['order_desc'] = params.get('order_dir', 'ASC').upper() == 'DESC'
+                if 'limit' in params and params['limit']:
+                    params['limit'] = int(params['limit'])
                 
                 return cmd_type, params
         
-        return 'UNKNOWN', None
+        # Check for simple commands
+        sql_upper = sql.upper()
+        if sql_upper == 'QUIT' or sql_upper == 'EXIT':
+            return 'QUIT', {}
+        
+        return 'UNKNOWN', {'sql': sql}
     
-    def _parse_values(self, values_str: str) -> list:
-        """Parse VALUES clause into list of values"""
+    def _parse_values(self, values_str: str) -> List[Any]:
+        """Parse VALUES clause."""
         values = []
-        current = ''
-        in_string = False
-        string_char = None
-        
-        for char in values_str:
-            if char in ("'", '"') and not in_string:
-                in_string = True
-                string_char = char
-                continue
-            elif char == string_char and in_string:
-                in_string = False
-                string_char = None
-                values.append(current.strip())
-                current = ''
-                continue
-            
-            if char == ',' and not in_string:
-                if current.strip():
-                    values.append(current.strip())
-                current = ''
-            else:
-                current += char
-        
-        if current.strip():
-            values.append(current.strip())
-        
-        result = []
-        for v in values:
-            v = v.strip()
+        for val in values_str.split(','):
+            val = val.strip()
+            # Try to convert to number
             try:
-                if '.' in v:
-                    result.append(float(v))
+                if '.' in val:
+                    values.append(float(val))
                 else:
-                    result.append(int(v))
+                    values.append(int(val))
             except ValueError:
-                result.append(v)
-        
-        return result
-    
-    def _parse_set_clause(self, set_str: str) -> Dict[str, Any]:
-        """Parse SET clause into dict of column=value pairs"""
-        result = {}
-        assignments = [a.strip() for a in set_str.split(',')]
-        
-        for assignment in assignments:
-            if '=' in assignment:
-                col, val = assignment.split('=', 1)
-                col = col.strip()
-                val = val.strip()
-                
-                try:
-                    if '.' in val:
-                        result[col] = float(val)
-                    else:
-                        result[col] = int(val)
-                except ValueError:
-                    if (val.startswith("'") and val.endswith("'")) or \
-                       (val.startswith('"') and val.endswith('"')):
-                        val = val[1:-1]
-                    result[col] = val
-        
-        return result
-    
-    def _parse_where_clause(self, where_str: str) -> Dict[str, Any]:
-        """Parse WHERE clause into conditions"""
-        conditions = {}
-        parts = [p.strip() for p in where_str.split('AND')]
-        
-        for part in parts:
-            if '=' in part:
-                col, val = part.split('=', 1)
-                col = col.strip()
-                val = val.strip()
-                
-                try:
-                    if '.' in val:
-                        conditions[col] = float(val)
-                    else:
-                        conditions[col] = int(val)
-                except ValueError:
-                    if (val.startswith("'") and val.endswith("'")) or \
-                       (val.startswith('"') and val.endswith('"')):
-                        val = val[1:-1]
-                    conditions[col] = val
-        
-        return conditions
+                # Remove quotes if present
+                if (val.startswith("'") and val.endswith("'")) or \
+                   (val.startswith('"') and val.endswith('"')):
+                    val = val[1:-1]
+                values.append(val)
+        return values
 
 
-class BackupRestoreParser(CommandParser):
-    """Extended parser with backup/restore and transaction commands."""
+class BackupRestoreParser:
+    """Parser for backup and restore commands with encryption and compression support."""
     
     def __init__(self):
-        super().__init__()
-        # Add backup/restore patterns
-        self.patterns['BACKUP_DB'] = re.compile(
-            r'^\s*BACKUP\s+DATABASE\s+(?P<database>\w+)\s+TO\s+["\']?(?P<file>[^"\']+)["\']?\s*$',
-            re.IGNORECASE
-        )
-        self.patterns['RESTORE_DB'] = re.compile(
-            r'^\s*RESTORE\s+DATABASE\s+(?P<database>\w+)\s+FROM\s+["\']?(?P<file>[^"\']+)["\']?\s*$',
-            re.IGNORECASE
-        )
-        self.patterns['BACKUP_TABLE'] = re.compile(
-            r'^\s*BACKUP\s+TABLE\s+(?P<table>\w+)\s+TO\s+["\']?(?P<file>[^"\']+)["\']?\s*$',
-            re.IGNORECASE
-        )
-        self.patterns['SHOW_BACKUPS'] = re.compile(
-            r'^\s*SHOW\s+BACKUPS(?:\s+(?P<path>\S+))?\s*$',
-            re.IGNORECASE
-        )
-        self.patterns['VERIFY_BACKUP'] = re.compile(
-            r'^\s*VERIFY\s+BACKUP\s+["\']?(?P<file>[^"\']+)["\']?\s*$',
-            re.IGNORECASE
-        )
-        # Transaction patterns
-        self.patterns['BEGIN'] = re.compile(
-            r'^\s*BEGIN\s*$',
-            re.IGNORECASE
-        )
-        self.patterns['COMMIT'] = re.compile(
-            r'^\s*COMMIT\s*$',
-            re.IGNORECASE
-        )
-        self.patterns['ROLLBACK'] = re.compile(
-            r'^\s*ROLLBACK\s*$',
-            re.IGNORECASE
-        )
-        # Distributed transaction patterns
-        self.patterns['DIST_TX_BEGIN'] = re.compile(
-            r'^\s*DIST_TX_BEGIN\s+(?P<operations>.+)$',
-            re.IGNORECASE
-        )
-        self.patterns['DIST_TX_STATUS'] = re.compile(
-            r'^\s*DIST_TX_STATUS\s+(?P<tx_id>[\w-]+)$',
-            re.IGNORECASE
-        )
-        self.patterns['DIST_TX_LIST'] = re.compile(
-            r'^\s*DIST_TX_LIST\s*$',
-            re.IGNORECASE
-        )
-        # Failover patterns
-        self.patterns['FAILOVER_STATUS'] = re.compile(
-            r'^\s*FAILOVER\s+STATUS\s*$',
-            re.IGNORECASE
-        )
-        self.patterns['FAILOVER_PROPOSE'] = re.compile(
-            r'^\s*FAILOVER\s+PROPOSE\s+(?P<command>.+)$',
-            re.IGNORECASE
-        )
-        # Monitoring patterns
-        self.patterns['METRICS'] = re.compile(
-            r'^\s*METRICS\s*$',
-            re.IGNORECASE
-        )
-        self.patterns['HEALTH'] = re.compile(
-            r'^\s*HEALTH\s*$',
-            re.IGNORECASE
-        )
-        self.patterns['PROMETHEUS'] = re.compile(
-            r'^\s*PROMETHEUS\s*$',
-            re.IGNORECASE
-        )
+        self.patterns = {
+            'BACKUP': re.compile(
+                r'^\s*BACKUP\s+(?:DATABASE\s+)?(?P<db_name>\w+)' +
+                r'(?:\s+TO\s+(?P<backup_path>\S+))?' +
+                r'(?:\s+WITH\s+(?P<options>.+))?\s*$',
+                re.IGNORECASE
+            ),
+            'RESTORE': re.compile(
+                r'^\s*RESTORE\s+(?:DATABASE\s+)?(?P<db_name>\w+)' +
+                r'(?:\s+FROM\s+(?P<backup_path>\S+))?' +
+                r'(?:\s+WITH\s+(?P<options>.+))?\s*$',
+                re.IGNORECASE
+            ),
+        }
     
-    def parse(self, command: str) -> Tuple[str, Optional[Dict[str, Any]]]:
-        """Extended parse with backup/restore/transaction commands."""
-        # Check for simple commands first
-        cmd_upper = command.strip().upper()
+    def parse(self, sql: str) -> Tuple[str, Dict[str, Any]]:
+        """Parse backup/restore commands."""
+        sql = sql.strip()
         
-        if cmd_upper == 'BEGIN':
-            return 'BEGIN', {}
-        if cmd_upper == 'COMMIT':
-            return 'COMMIT', {}
-        if cmd_upper == 'ROLLBACK':
-            return 'ROLLBACK', {}
-        if cmd_upper == 'DIST_TX_LIST':
-            return 'DIST_TX_LIST', {}
-        if cmd_upper == 'FAILOVER STATUS':
-            return 'FAILOVER_STATUS', {}
-        if cmd_upper == 'METRICS':
-            return 'METRICS', {}
-        if cmd_upper == 'HEALTH':
-            return 'HEALTH', {}
-        if cmd_upper == 'PROMETHEUS':
-            return 'PROMETHEUS', {}
-        
-        # Try patterns
         for cmd_type, pattern in self.patterns.items():
-            match = pattern.match(command)
+            match = pattern.match(sql)
             if match:
                 params = match.groupdict()
+                
+                # Parse options (ENCRYPTION, COMPRESSION, etc.)
+                options_str = params.get('options', '')
+                if options_str:
+                    options = self._parse_options(options_str)
+                    params.update(options)
+                
                 return cmd_type, params
         
-        # Fall back to parent parser
-        return super().parse(command)
+        # Fall back to regular parser
+        regular_parser = CommandParser()
+        return regular_parser.parse(sql)
+    
+    def _parse_options(self, options_str: str) -> Dict[str, Any]:
+        """Parse WITH options for backup/restore."""
+        options = {}
+        
+        # ENCRYPTION 'password'
+        enc_match = re.search(r"ENCRYPTION\s+['\"]([^'\"]+)['\"]", options_str, re.IGNORECASE)
+        if enc_match:
+            options['encryption'] = enc_match.group(1)
+        
+        # COMPRESSION 'gzip|lz4|zstd|none'
+        comp_match = re.search(r"COMPRESSION\s+(\w+)", options_str, re.IGNORECASE)
+        if comp_match:
+            options['compression'] = comp_match.group(1).lower()
+        
+        # LEVEL 1-9
+        level_match = re.search(r"LEVEL\s+(\d+)", options_str, re.IGNORECASE)
+        if level_match:
+            options['compression_level'] = int(level_match.group(1))
+        
+        return options
+
+
+# Example usage
+if __name__ == '__main__':
+    parser = CommandParser()
+    
+    test_commands = [
+        "CREATE DATABASE testdb",
+        "USE testdb",
+        "CREATE TABLE users (id INT, name TEXT)",
+        "INSERT INTO users VALUES (1, 'Alice')",
+        "SELECT * FROM users WHERE id = 1",
+        "UPDATE users SET name = 'Bob' WHERE id = 1",
+        "DELETE FROM users WHERE id = 1",
+        "DROP TABLE users",
+        "DROP DATABASE testdb",
+        "GRANT SELECT, INSERT ON testdb.users TO alice",
+        "REVOKE DELETE ON testdb.users FROM alice",
+        "CREATE ROLE readonly DESCRIPTION 'Read-only access'",
+        "GRANT ROLE readonly TO alice",
+        "SHOW GRANTS FOR alice",
+        "SHOW ROLES",
+    ]
+    
+    for cmd in test_commands:
+        cmd_type, params = parser.parse(cmd)
+        print(f"Command: {cmd}")
+        print(f"  Type: {cmd_type}")
+        print(f"  Params: {params}")
+        print()
+    
+    # Test backup/restore parser
+    backup_parser = BackupRestoreParser()
+    backup_commands = [
+        "BACKUP DATABASE mydb TO /path/backup WITH ENCRYPTION 'mypass' COMPRESSION gzip",
+        "BACKUP mydb WITH COMPRESSION lz4 LEVEL 9",
+        "RESTORE DATABASE mydb FROM /path/backup WITH ENCRYPTION 'mypass'",
+        "RESTORE mydb FROM backup.enc",
+    ]
+    
+    print("=== Backup/Restore Commands ===")
+    for cmd in backup_commands:
+        cmd_type, params = backup_parser.parse(cmd)
+        print(f"Command: {cmd}")
+        print(f"  Type: {cmd_type}")
+        print(f"  Params: {params}")
+        print()

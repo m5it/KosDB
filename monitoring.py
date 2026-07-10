@@ -2,6 +2,7 @@
 Monitoring and Metrics System for LevelDB Socket Server
 
 Provides performance metrics, health checks, and monitoring endpoints.
+Includes GPU metrics when available.
 """
 
 import time
@@ -15,6 +16,13 @@ from enum import Enum
 import psutil
 import os
 
+# Try to import GPU metrics
+try:
+    from gpu_vector_search import check_gpu_availability, GPU_AVAILABLE
+    GPU_METRICS_AVAILABLE = True
+except ImportError:
+    GPU_METRICS_AVAILABLE = False
+
 
 class MetricType(Enum):
     """Types of metrics."""
@@ -22,12 +30,6 @@ class MetricType(Enum):
     GAUGE = "gauge"
     HISTOGRAM = "histogram"
     TIMER = "timer"
-
-
-@dataclass
-class Metric:
-    """Single metric data point."""
-    name: str
     metric_type: MetricType
     value: float
     timestamp: float
@@ -195,57 +197,104 @@ class MetricsRegistry:
             
             return result
     
-    def _parse_key(self, key: str) -> Dict[str, Any]:
-        """Parse key into name and labels."""
-        if '{' not in key:
-            return {'name': key, 'labels': {}}
-        
-        name, labels_str = key.split('{', 1)
-        labels_str = labels_str.rstrip('}')
-        
-        labels = {}
-        for part in labels_str.split(','):
-            if '=' in part:
-                k, v = part.split('=', 1)
-                labels[k] = v
-        
-        return {'name': name, 'labels': labels}
+class SystemMetricsCollector:
+    """
+    Collects system-level metrics including GPU when available.
+    """
     
-    def export_prometheus(self) -> str:
-        """Export metrics in Prometheus format."""
-        lines = []
+    def __init__(self, registry: MetricsRegistry):
+        self.registry = registry
+        self.process = psutil.Process(os.getpid())
+        self._running = False
+        self._thread: Optional[threading.Thread] = None
+    
+    def start(self, interval: float = 10.0):
+        """Start collecting system metrics."""
+        self._running = True
+        self._thread = threading.Thread(target=self._collect_loop, 
+                                          args=(interval,), daemon=True)
+        self._thread.start()
+    
+    def stop(self):
+        """Stop collecting system metrics."""
+        self._running = False
+    
+    def _collect_loop(self, interval: float):
+        """Collect metrics in a loop."""
+        while self._running:
+            try:
+                self._collect_once()
+                if GPU_METRICS_AVAILABLE:
+                    self._collect_gpu_metrics()
+            except Exception as e:
+                print(f"[METRICS] Collection error: {e}")
+            
+            time.sleep(interval)
+    
+    def _collect_once(self):
+        """Collect system metrics once."""
+        # CPU
+        cpu_percent = self.process.cpu_percent()
+        self.registry.set_gauge('system.cpu_percent', cpu_percent)
         
-        with self._lock:
-            # Counters
-            for key, value in self._counters.items():
-                name_labels = self._parse_key(key)
-                name = name_labels['name'].replace('.', '_')
-                labels = name_labels.get('labels', {})
-                label_str = self._format_labels(labels)
-                lines.append(f"# TYPE {name} counter")
-                lines.append(f"{name}{label_str} {value}")
+        # Memory
+        memory_info = self.process.memory_info()
+        self.registry.set_gauge('system.memory_rss_bytes', memory_info.rss)
+        self.registry.set_gauge('system.memory_vms_bytes', memory_info.vms)
+        
+        # Disk
+        disk_io = self.process.io_counters()
+        self.registry.set_gauge('system.disk_read_bytes', disk_io.read_bytes)
+        self.registry.set_gauge('system.disk_write_bytes', disk_io.write_bytes)
+        
+        # Network
+        net_io = psutil.net_io_counters()
+        self.registry.set_gauge('system.net_sent_bytes', net_io.bytes_sent)
+        self.registry.set_gauge('system.net_recv_bytes', net_io.bytes_recv)
+        
+        # Open files
+        open_files = len(self.process.open_files())
+        self.registry.set_gauge('system.open_files', open_files)
+        
+        # Thread count
+        self.registry.set_gauge('system.threads', self.process.num_threads())
+        
+        # Load average (Unix only)
+        try:
+            load1, load5, load15 = os.getloadavg()
+            self.registry.set_gauge('system.load1', load1)
+            self.registry.set_gauge('system.load5', load5)
+            self.registry.set_gauge('system.load15', load15)
+        except AttributeError:
+            pass  # Windows doesn't have getloadavg
+    
+    def _collect_gpu_metrics(self):
+        """Collect GPU metrics if available."""
+        if not GPU_METRICS_AVAILABLE or not GPU_AVAILABLE:
+            return
+        
+        try:
+            gpu_info = check_gpu_availability()
             
-            # Gauges
-            for key, value in self._gauges.items():
-                name_labels = self._parse_key(key)
-                name = name_labels['name'].replace('.', '_')
-                labels = name_labels.get('labels', {})
-                label_str = self._format_labels(labels)
-                lines.append(f"# TYPE {name} gauge")
-                lines.append(f"{name}{label_str} {value}")
+            if gpu_info.get('memory_free') and gpu_info.get('memory_total'):
+                memory_free = gpu_info['memory_free']
+                memory_total = gpu_info['memory_total']
+                memory_used = memory_total - memory_free
+                
+                self.registry.set_gauge('gpu.memory_free_bytes', memory_free)
+                self.registry.set_gauge('gpu.memory_used_bytes', memory_used)
+                self.registry.set_gauge('gpu.memory_total_bytes', memory_total)
+                
+                utilization = (memory_used / memory_total) * 100 if memory_total > 0 else 0
+                self.registry.set_gauge('gpu.memory_utilization_percent', utilization)
             
-            # Histograms
-            for key, values in self._histograms.items():
-                if not values:
-                    continue
-                name_labels = self._parse_key(key)
-                name = name_labels['name'].replace('.', '_')
-                labels = name_labels.get('labels', {})
+            if gpu_info.get('device_name'):
+                self.registry.set_gauge('gpu.available', 1)
+            else:
+                self.registry.set_gauge('gpu.available', 0)
                 
-                stats = self.get_histogram_stats(name_labels['name'], 
-                                                  name_labels.get('labels'))
-                
-                lines.append(f"# TYPE {name} histogram")
+        except Exception as e:
+            logger.debug(f"[METRICS] GPU metrics collection failed: {e}")
                 lines.append(f"{name}_count{self._format_labels(labels)} {stats['count']}")
                 lines.append(f"{name}_sum{self._format_labels(labels)} {stats['sum']}")
                 lines.append(f"{name}_bucket{{le=\"+Inf\"}}{self._format_labels(labels)} {stats['count']}")
