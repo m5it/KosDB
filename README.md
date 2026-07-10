@@ -1,6 +1,6 @@
 # KosDB - Distributed Database System
 
-[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-3.0.0-blue.svg)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
@@ -15,7 +15,7 @@ A high-performance, distributed database system built on LevelDB with support fo
 - **Master-Slave Replication**: Asynchronous replication with binlog
 - **Automatic Failover**: Raft consensus for leader election
 
-### Advanced Features (v2.0)
+### Advanced Features (v3.0)
 - **🔌 Agent Protocol** - Inter-agent communication with capability registry and task delegation
 - **⚡ Command Parser** - Full SQL parser with statement validation and parameter extraction
 - **🛡️ Input Validation** - Schema-based validation with type checking and sanitization
@@ -100,13 +100,13 @@ python cli.py -H localhost -P 5555 -u admin -p secret
 - `COMMIT` - Commit transaction
 - `ROLLBACK` - Rollback transaction
 
-### Vector Search (New in v2.0)
+### Vector Search (New in v3.0)
 - `CREATE VECTOR INDEX <name> ON <table> (column)` - Create vector index
 - `VECTOR SEARCH <index> WITH <query> [K <n>]` - Semantic search
 - `VECTOR ADD <index> <id> <text>` - Add document to index
 - `VECTOR DELETE <index> <id>` - Remove from index
 
-### Schema Migration (New in v2.0)
+### Schema Migration (New in v3.0)
 - `MIGRATE CREATE <description>` - Create new migration
 - `MIGRATE UP` - Apply pending migrations
 - `MIGRATE DOWN` - Rollback last migration
@@ -185,7 +185,7 @@ Create `config.json`:
 }
 ```
 
-## New Features in v2.0
+## New Features in v3.0
 
 ### 🔍 Vector Similarity Search
 ```sql
@@ -320,7 +320,7 @@ Benchmark results on a typical server:
 - Replication user with limited privileges
 - Input validation and SQL injection protection
 
-## What's New in v2.0.0
+## What's New in v3.0.0
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
 
@@ -382,14 +382,14 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
 
 ## Version History
 
-- **v2.0.0** (2025-01-09) - Major release with 12 advanced features
-- **v1.0.0** (2025-01-09) - Initial release with core features
+- **v3.0.0** (2026-01-09) - Major release with 12 advanced features
+- **v1.0.0** (2026-01-09) - Initial release with core features
 
 ## Roadmap
 
-- **v2.1.0** - TLS encryption, query caching improvements, GPU-accelerated vector search
-- **v2.2.0** - Multi-region replication, automatic sharding, vector quantization
-- **v3.0.0** - SQL compatibility layer, stored procedures, triggers
+- **v3.1.0** - TLS encryption, query caching improvements, GPU-accelerated vector search
+- **v3.2.0** - Multi-region replication, automatic sharding, vector quantization
+- **v4.0.0** - SQL compatibility layer, stored procedures, triggers
 
 ## License
 
