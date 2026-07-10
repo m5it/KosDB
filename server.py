@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from database import Database
 from auth import Authenticator
-from parser import CommandParser
+from parser import BackupRestoreParser
 from commands import CommandRegistry
 from replication import ReplicationClient, ReplicationServer
 
@@ -30,14 +30,14 @@ def setup_admin(db: Database, username: str, password: str):
 
 
 class ClientHandler(threading.Thread):
-    def __init__(self, client_socket, address, db, authenticator):
+    def __init__(self, client_socket, address, db, authenticator, replication_client=None):
         super().__init__(daemon=True)
         self.client_socket = client_socket
         self.address = address
         self.db = db
         self.authenticator = authenticator
-        self.parser = CommandParser()
-        self.commands = CommandRegistry(db)
+        self.parser = BackupRestoreParser()
+        self.commands = CommandRegistry(db, replication_client)
         self.authenticated = False
         self.session_token = None
         self.user_info = None
@@ -217,7 +217,10 @@ class SocketServer:
         try:
             while self.running:
                 client_socket, address = self.server_socket.accept()
-                handler = ClientHandler(client_socket, address, self.db, self.authenticator)
+                handler = ClientHandler(
+                    client_socket, address, self.db, self.authenticator,
+                    self.replication_client
+                )
                 handler.start()
         except KeyboardInterrupt:
             print("\nShutting down...")

@@ -4,6 +4,7 @@ import os
 import json
 import hashlib
 import secrets
+import time
 import plyvel
 from typing import Optional, Dict, Any, List
 from binlog import Binlog
@@ -20,6 +21,9 @@ class Database:
         self._db: Optional[plyvel.DB] = None
         self._system_db: Optional[plyvel.DB] = None  # For users/privileges
         self._binlog: Optional[Binlog] = None
+        self._transaction_active = False
+        self._transaction_changes: Dict[bytes, Optional[bytes]] = {}
+        self._transaction_start_time: float = 0
         self._ensure_data_dir()
         self._open_system_db()
         self._open_binlog()
@@ -73,6 +77,66 @@ class Database:
         """Create a key for a row."""
         return f"{table_name}:{row_id}".encode()
     
+    # Transaction support
+    def begin_transaction(self) -> str:
+        """Begin a new transaction."""
+        if not self._db:
+            return "ERROR: No database selected"
+        if self._transaction_active:
+            return "ERROR: Transaction already active"
+        
+        self._transaction_active = True
+        self._transaction_changes = {}
+        self._transaction_start_time = time.time()
+        return "OK: Transaction started"
+    
+    def commit_transaction(self) -> str:
+        """Commit the current transaction."""
+        if not self._transaction_active:
+            return "ERROR: No active transaction"
+        
+        try:
+            # Apply all changes
+            for key, value in self._transaction_changes.items():
+                if value is None:
+                    self._db.delete(key)
+                else:
+                    self._db.put(key, value)
+            
+            duration = time.time() - self._transaction_start_time
+            changes = len(self._transaction_changes)
+            self._transaction_active = False
+            self._transaction_changes = {}
+            
+            return f"OK: Committed {changes} change(s) in {duration:.3f}s"
+        except Exception as e:
+            return f"ERROR: Commit failed: {e}"
+    
+    def rollback_transaction(self) -> str:
+        """Rollback the current transaction."""
+        if not self._transaction_active:
+            return "ERROR: No active transaction"
+        
+        changes = len(self._transaction_changes)
+        self._transaction_active = False
+        self._transaction_changes = {}
+        
+        return f"OK: Rolled back {changes} change(s)"
+    
+    def _transaction_put(self, key: bytes, value: bytes):
+        """Queue a put operation in the transaction."""
+        if self._transaction_active:
+            self._transaction_changes[key] = value
+        else:
+            self._db.put(key, value)
+    
+    def _transaction_delete(self, key: bytes):
+        """Queue a delete operation in the transaction."""
+        if self._transaction_active:
+            self._transaction_changes[key] = None
+        else:
+            self._db.delete(key)
+    
     def create_database(self, db_name: str) -> str:
         """Create a new database (LevelDB instance)."""
         db_path = self._db_path(db_name)
@@ -120,6 +184,9 @@ class Database:
     
     def use_database(self, db_name: str) -> str:
         """Switch to a database."""
+        if self._transaction_active:
+            return "ERROR: Cannot switch database during transaction"
+        
         db_path = self._db_path(db_name)
         if not os.path.exists(db_path):
             return f"Database '{db_name}' does not exist"
@@ -162,15 +229,15 @@ class Database:
             "primary_key": primary_key,
             "indexes": index_columns
         }
-        self._db.put(schema_key, json.dumps(schema).encode())
+        self._transaction_put(schema_key, json.dumps(schema).encode())
         
         if primary_key:
             idx_key = f"_index:{table_name}:{primary_key}".encode()
-            self._db.put(idx_key, json.dumps({}).encode())
+            self._transaction_put(idx_key, json.dumps({}).encode())
         
         for idx_col in index_columns:
             idx_key = f"_index:{table_name}:{idx_col}".encode()
-            self._db.put(idx_key, json.dumps({}).encode())
+            self._transaction_put(idx_key, json.dumps({}).encode())
         
         # Log to binlog
         if self._binlog:
@@ -195,9 +262,9 @@ class Database:
         
         prefix = f"{table_name}:".encode()
         for key, _ in self._db.iterator(prefix=prefix):
-            self._db.delete(key)
+            self._transaction_delete(key)
         
-        self._db.delete(schema_key)
+        self._transaction_delete(schema_key)
         
         # Log to binlog
         if self._binlog:
@@ -236,13 +303,13 @@ class Database:
             store_key = row_id
         
         key = self._make_key(table_name, store_key)
-        self._db.put(key, json.dumps(row).encode())
+        self._transaction_put(key, json.dumps(row).encode())
         
         self._update_indexes(table_name, row, store_key, schema)
         
         if not primary_key:
             schema["next_id"] += 1
-            self._db.put(schema_key, json.dumps(schema).encode())
+            self._transaction_put(schema_key, json.dumps(schema).encode())
         
         # Log to binlog
         if self._binlog:
@@ -267,7 +334,7 @@ class Database:
             if idx_data:
                 index_map = json.loads(idx_data.decode())
                 index_map[str(row[primary_key])] = row_key
-                self._db.put(idx_key, json.dumps(index_map).encode())
+                self._transaction_put(idx_key, json.dumps(index_map).encode())
         
         for idx_col in indexes:
             if idx_col in row:
@@ -282,20 +349,21 @@ class Database:
                         index_map[val].append(row_key)
                     else:
                         index_map[val] = [index_map[val], row_key]
-                    self._db.put(idx_key, json.dumps(index_map).encode())
+                    self._transaction_put(idx_key, json.dumps(index_map).encode())
     
     def select(self, table_name: str, columns: Optional[List[str]] = None,
                where: Optional[Dict[str, Any]] = None,
                order_by: Optional[str] = None,
-               order_desc: bool = False) -> str:
+               order_desc: bool = False,
+               raw: bool = False) -> Any:
         """Select rows from a table with optional ordering."""
         if not self._db:
-            return "No database selected. Use USE <database>"
+            return "No database selected. Use USE <database>" if not raw else []
         
         schema_key = f"_schema:{table_name}".encode()
         schema_data = self._db.get(schema_key)
         if not schema_data:
-            return f"Table '{table_name}' does not exist"
+            return f"Table '{table_name}' does not exist" if not raw else []
         
         schema = json.loads(schema_data.decode())
         if columns is None or "*" in columns:
@@ -326,6 +394,9 @@ class Database:
             
             if order_by == "id":
                 results.sort(key=lambda r: r.get("id", ""), reverse=order_desc)
+        
+        if raw:
+            return results
         
         if not results:
             return "Empty set"
@@ -422,7 +493,7 @@ class Database:
             for col, val in set_clause.items():
                 row[col] = val
             
-            self._db.put(key, json.dumps(row).encode())
+            self._transaction_put(key, json.dumps(row).encode())
             
             if old_key_val is not None and primary_key:
                 self._update_indexes(table_name, row, str(row[primary_key]), schema)
@@ -476,7 +547,7 @@ class Database:
             deleted_rows.append(row.copy())
         
         for key in keys_to_delete:
-            self._db.delete(key)
+            self._transaction_delete(key)
             deleted += 1
         
         # Log to binlog
@@ -526,6 +597,8 @@ class Database:
     
     def close(self):
         """Close the database connection."""
+        if self._transaction_active:
+            self.rollback_transaction()
         if self._db:
             self._db.close()
             self._db = None
@@ -583,7 +656,7 @@ class Database:
             "username": username,
             "password_hash": password_hash,
             "is_admin": is_admin,
-            "created_at": str(os.times().system)
+            "created_at": str(time.time())
         }
         
         key = f"_users:{user_id}".encode()
