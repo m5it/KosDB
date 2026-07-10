@@ -328,6 +328,6 @@ MIT License - See LICENSE file for details
 
 ## Support
 
-- GitHub Issues: https://github.com/yourusername/leveldb-server/issues
-- Documentation: https://leveldb-server.readthedocs.io
-- Email: support@example.com
+- GitHub Issues: https://github.com/m5it/KosDB/issues
+- Documentation: https://kosdb.readthedocs.io
+- Email: w4d4f4k@gmail.com
