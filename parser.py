@@ -82,7 +82,7 @@ class CommandParser:
                 re.IGNORECASE
             ),
             'CREATE_REPL_USER': re.compile(
-                r'^\s*CREATE\s+REPLICATION\s+USER\s+[\'"]?(?P<username>\w+)[\'"]?\s+IDENTIFIED\s+BY\s+[\'"]?(?P<password>[^\'"\s]+)[\'"]?\s*$',
+                r'^\s*CREATE\s+REPLICATION\s+USER\s+["\']?(?P<username>\w+)["\']?\s+IDENTIFIED\s+BY\s+["\']?(?P<password>[^"\s]+)["\']?\s*$',
                 re.IGNORECASE
             ),
             'HELP': re.compile(
@@ -240,3 +240,111 @@ class CommandParser:
                     conditions[col] = val
         
         return conditions
+
+
+class BackupRestoreParser(CommandParser):
+    """Extended parser with backup/restore and transaction commands."""
+    
+    def __init__(self):
+        super().__init__()
+        # Add backup/restore patterns
+        self.patterns['BACKUP_DB'] = re.compile(
+            r'^\s*BACKUP\s+DATABASE\s+(?P<database>\w+)\s+TO\s+["\']?(?P<file>[^"\']+)["\']?\s*$',
+            re.IGNORECASE
+        )
+        self.patterns['RESTORE_DB'] = re.compile(
+            r'^\s*RESTORE\s+DATABASE\s+(?P<database>\w+)\s+FROM\s+["\']?(?P<file>[^"\']+)["\']?\s*$',
+            re.IGNORECASE
+        )
+        self.patterns['BACKUP_TABLE'] = re.compile(
+            r'^\s*BACKUP\s+TABLE\s+(?P<table>\w+)\s+TO\s+["\']?(?P<file>[^"\']+)["\']?\s*$',
+            re.IGNORECASE
+        )
+        self.patterns['SHOW_BACKUPS'] = re.compile(
+            r'^\s*SHOW\s+BACKUPS(?:\s+(?P<path>\S+))?\s*$',
+            re.IGNORECASE
+        )
+        self.patterns['VERIFY_BACKUP'] = re.compile(
+            r'^\s*VERIFY\s+BACKUP\s+["\']?(?P<file>[^"\']+)["\']?\s*$',
+            re.IGNORECASE
+        )
+        # Transaction patterns
+        self.patterns['BEGIN'] = re.compile(
+            r'^\s*BEGIN\s*$',
+            re.IGNORECASE
+        )
+        self.patterns['COMMIT'] = re.compile(
+            r'^\s*COMMIT\s*$',
+            re.IGNORECASE
+        )
+        self.patterns['ROLLBACK'] = re.compile(
+            r'^\s*ROLLBACK\s*$',
+            re.IGNORECASE
+        )
+        # Distributed transaction patterns
+        self.patterns['DIST_TX_BEGIN'] = re.compile(
+            r'^\s*DIST_TX_BEGIN\s+(?P<operations>.+)$',
+            re.IGNORECASE
+        )
+        self.patterns['DIST_TX_STATUS'] = re.compile(
+            r'^\s*DIST_TX_STATUS\s+(?P<tx_id>[\w-]+)$',
+            re.IGNORECASE
+        )
+        self.patterns['DIST_TX_LIST'] = re.compile(
+            r'^\s*DIST_TX_LIST\s*$',
+            re.IGNORECASE
+        )
+        # Failover patterns
+        self.patterns['FAILOVER_STATUS'] = re.compile(
+            r'^\s*FAILOVER\s+STATUS\s*$',
+            re.IGNORECASE
+        )
+        self.patterns['FAILOVER_PROPOSE'] = re.compile(
+            r'^\s*FAILOVER\s+PROPOSE\s+(?P<command>.+)$',
+            re.IGNORECASE
+        )
+        # Monitoring patterns
+        self.patterns['METRICS'] = re.compile(
+            r'^\s*METRICS\s*$',
+            re.IGNORECASE
+        )
+        self.patterns['HEALTH'] = re.compile(
+            r'^\s*HEALTH\s*$',
+            re.IGNORECASE
+        )
+        self.patterns['PROMETHEUS'] = re.compile(
+            r'^\s*PROMETHEUS\s*$',
+            re.IGNORECASE
+        )
+    
+    def parse(self, command: str) -> Tuple[str, Optional[Dict[str, Any]]]:
+        """Extended parse with backup/restore/transaction commands."""
+        # Check for simple commands first
+        cmd_upper = command.strip().upper()
+        
+        if cmd_upper == 'BEGIN':
+            return 'BEGIN', {}
+        if cmd_upper == 'COMMIT':
+            return 'COMMIT', {}
+        if cmd_upper == 'ROLLBACK':
+            return 'ROLLBACK', {}
+        if cmd_upper == 'DIST_TX_LIST':
+            return 'DIST_TX_LIST', {}
+        if cmd_upper == 'FAILOVER STATUS':
+            return 'FAILOVER_STATUS', {}
+        if cmd_upper == 'METRICS':
+            return 'METRICS', {}
+        if cmd_upper == 'HEALTH':
+            return 'HEALTH', {}
+        if cmd_upper == 'PROMETHEUS':
+            return 'PROMETHEUS', {}
+        
+        # Try patterns
+        for cmd_type, pattern in self.patterns.items():
+            match = pattern.match(command)
+            if match:
+                params = match.groupdict()
+                return cmd_type, params
+        
+        # Fall back to parent parser
+        return super().parse(command)
