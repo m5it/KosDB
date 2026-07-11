@@ -1,6 +1,6 @@
-# KosDB v3.2.0
+# KosDB v3.3.0
 
-A high-performance, feature-rich LevelDB-based database server with SQL-like interface, replication, TLS encryption, GPU acceleration, comprehensive audit logging, and advanced query capabilities.
+A high-performance, feature-rich LevelDB-based database server with SQL-like interface, replication, TLS encryption, GPU acceleration, comprehensive audit logging, advanced query capabilities, window functions, CTEs, and prepared statements.
 
 ## Features
 
@@ -12,6 +12,12 @@ A high-performance, feature-rich LevelDB-based database server with SQL-like int
 - **Indexing**: Primary, secondary, and full-text index support
 - **Views**: Virtual tables based on SELECT queries
 - **Subqueries**: Scalar, IN/NOT IN, EXISTS/NOT EXISTS, correlated subqueries
+
+### Advanced SQL (New in v3.3.0)
+- **Window Functions**: ROW_NUMBER, RANK, DENSE_RANK, LEAD, LAG, FIRST_VALUE, LAST_VALUE
+- **Common Table Expressions (CTEs)**: Recursive and non-recursive WITH clauses
+- **Prepared Statements**: PREPARE, EXECUTE, DEALLOCATE with parameter binding
+- **SQL Injection Prevention**: Secure parameter binding with proper escaping
 
 ### Security (New in v3.1.0+)
 - **TLS/SSL Encryption**: Secure client-server communication
@@ -125,7 +131,7 @@ python cli.py -H localhost -p 9999 --tls --ca-cert ca.crt -u admin -P secret123
 
 ```json
 {
-  "version": "3.2.0",
+  "version": "3.3.0",
   "server": {
     "host": "0.0.0.0",
     "port": 9999,
@@ -180,6 +186,18 @@ Access metrics at:
     "cache_size": 100,
     "collect_statistics": true,
     "enable_semi_join": true
+  }
+}
+```
+
+### Prepared Statement Configuration (New in v3.3.0)
+
+```json
+{
+  "prepared_statements": {
+    "cache_size": 100,
+    "max_parameters": 100,
+    "parameter_style": "named"
   }
 }
 ```
@@ -338,6 +356,106 @@ SELECT * FROM users WHERE EXISTS (SELECT 1 FROM orders WHERE orders.user_id = us
 -- Correlated subquery
 SELECT name, (SELECT MAX(total) FROM orders WHERE orders.user_id = users.id) as max_order
 FROM users;
+```
+
+### Window Functions (New in v3.3.0)
+
+```sql
+-- Row number within partition
+SELECT 
+    name,
+    dept,
+    salary,
+    ROW_NUMBER() OVER (PARTITION BY dept ORDER BY salary DESC) as rank_in_dept
+FROM employees;
+
+-- RANK and DENSE_RANK
+SELECT 
+    name,
+    salary,
+    RANK() OVER (ORDER BY salary DESC) as salary_rank,
+    DENSE_RANK() OVER (ORDER BY salary DESC) as dense_rank
+FROM employees;
+
+-- LEAD and LAG
+SELECT 
+    name,
+    salary,
+    LAG(salary, 1, 0) OVER (ORDER BY hire_date) as prev_salary,
+    LEAD(salary, 1, 0) OVER (ORDER BY hire_date) as next_salary
+FROM employees;
+
+-- FIRST_VALUE and LAST_VALUE
+SELECT 
+    dept,
+    name,
+    salary,
+    FIRST_VALUE(salary) OVER (PARTITION BY dept ORDER BY hire_date) as first_salary,
+    LAST_VALUE(salary) OVER (PARTITION BY dept ORDER BY hire_date) as last_salary
+FROM employees;
+```
+
+### Common Table Expressions (CTEs) (New in v3.3.0)
+
+```sql
+-- Simple CTE
+WITH sales_summary AS (
+    SELECT dept, SUM(sales) as total_sales
+    FROM sales
+    GROUP BY dept
+)
+SELECT * FROM sales_summary WHERE total_sales > 10000;
+
+-- Multiple CTEs
+WITH 
+    dept_sales AS (
+        SELECT dept, SUM(sales) as total
+        FROM sales
+        GROUP BY dept
+    ),
+    top_depts AS (
+        SELECT dept FROM dept_sales ORDER BY total DESC LIMIT 5
+    )
+SELECT * FROM sales WHERE dept IN (SELECT dept FROM top_depts);
+
+-- Recursive CTE for hierarchical data
+WITH RECURSIVE employee_hierarchy AS (
+    -- Anchor: top-level employees
+    SELECT id, name, manager_id, 0 as level
+    FROM employees
+    WHERE manager_id IS NULL
+    
+    UNION ALL
+    
+    -- Recursive: employees with managers
+    SELECT e.id, e.name, e.manager_id, eh.level + 1
+    FROM employees e
+    JOIN employee_hierarchy eh ON e.manager_id = eh.id
+)
+SELECT * FROM employee_hierarchy ORDER BY level, name;
+```
+
+### Prepared Statements (New in v3.3.0)
+
+```sql
+-- Prepare statement with positional parameters
+PREPARE get_user AS SELECT * FROM users WHERE id = ?;
+
+-- Prepare with named parameters
+PREPARE get_by_name AS 
+    SELECT * FROM users WHERE name = :name AND age > :min_age;
+
+-- Execute with positional parameters
+EXECUTE get_user USING (42);
+
+-- Execute with named parameters
+EXECUTE get_by_name USING name='Alice', min_age=18;
+
+-- Deallocate prepared statement
+DEALLOCATE get_user;
+
+-- Deallocate all prepared statements
+DEALLOCATE ALL;
 ```
 
 ### Views (New in v3.2.0)
@@ -610,6 +728,17 @@ Access metrics:
 - Verify passphrase is correct
 - Check key file permissions (should be 600)
 - Ensure cryptography library is installed
+
+## Migration from v3.2 to v3.3
+
+New in v3.3.0:
+- **Window Functions**: No migration needed, new SQL feature
+- **CTEs**: No migration needed, new SQL feature  
+- **Prepared Statements**: No migration needed, new SQL feature
+
+All v3.3.0 features are backward compatible with v3.2.0 databases.
+
+See [MIGRATION_v3.2_to_v3.3.md](MIGRATION_v3.2_to_v3.3.md) for detailed migration guide.
 
 ## Migration from v3.1 to v3.2
 
