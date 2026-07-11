@@ -5,6 +5,7 @@ LevelDB Socket Server with Database-Driven Authentication, Replication, and TLS 
 
 import socket
 import threading
+import ssl
 import sys
 import os
 import argparse
@@ -18,9 +19,8 @@ from parser import BackupRestoreParser
 from commands import CommandRegistry
 from replication import ReplicationClient, ReplicationServer
 from tls_wrapper import TLSConfig, TLSSocketWrapper, generate_self_signed_cert
-from auth import Authenticator
-from parser import BackupRestoreParser
-from commands import CommandRegistry
+
+
 class ClientHandler(threading.Thread):
     def __init__(self, client_socket, address, db, authenticator, replication_client=None, tls_wrapper=None):
         super().__init__(daemon=True)
@@ -49,21 +49,6 @@ class ClientHandler(threading.Thread):
                 'cipher': self.client_socket.cipher()[0] if self.client_socket.cipher() else 'unknown'
             }
         return {'encrypted': False}
-
-class ClientHandler(threading.Thread):
-    def __init__(self, client_socket, address, db, authenticator, replication_client=None):
-        super().__init__(daemon=True)
-        self.client_socket = client_socket
-        self.address = address
-        self.db = db
-        self.authenticator = authenticator
-        self.parser = BackupRestoreParser()
-        self.commands = CommandRegistry(db, replication_client)
-        self.authenticated = False
-        self.session_token = None
-        self.user_info = None
-        self.client_state = {'current_db': None, 'username': None, 'is_admin': False}
-        self.running = True
     
     def send(self, message):
         self.client_socket.sendall(message.encode() + b'\n')
@@ -127,6 +112,55 @@ class ClientHandler(threading.Thread):
         
         if cmd == "USER":
             if len(parts) < 2:
+                return "ERROR: USER requires username"
+            self.username = parts[1]
+            return "OK: Send PASS <password>"
+        
+        elif cmd == "PASS":
+            if len(parts) < 2:
+                return "ERROR: PASS requires password"
+            if not hasattr(self, 'username'):
+                return "ERROR: Send USER first"
+            
+            password = parts[1]
+            success, result = self.authenticator.authenticate(self.username, password)
+            
+            if success:
+                self.authenticated = True
+                self.session_token = result
+                self.user_info = self.authenticator.get_user_info(self.username)
+                self.client_state['username'] = self.username
+                self.client_state['is_admin'] = self.user_info.get('is_admin', False)
+                return f"OK: Welcome {self.username}"
+            else:
+                return f"ERROR: {result}"
+        
+        elif cmd == "QUIT":
+            return "BYE"
+        
+        else:
+            return "ERROR: Authentication required"
+    
+    def _check_privileges(self, cmd_type, params):
+        """Check if user has privileges for command."""
+        if not self.user_info:
+            return False
+        
+        is_admin = self.user_info.get('is_admin', False)
+        
+        # Admin-only commands
+        admin_commands = {
+            'CREATE_USER', 'DROP_USER', 'GRANT_ADMIN', 'REVOKE_ADMIN',
+            'BACKUP_DATABASE', 'BACKUP_TABLE', 'RESTORE_DATABASE',
+            'FAILOVER_STATUS', 'FAILOVER_PROPOSE'
+        }
+        
+        if cmd_type in admin_commands and not is_admin:
+            return False
+        
+        return True
+
+
 class SocketServer:
     def __init__(self, host='0.0.0.0', port=9999, data_dir='./data',
                  server_id=1, role='master', master_host=None, 
@@ -157,6 +191,8 @@ class SocketServer:
         # Replication components (initialized later)
         self.replication_server = None
         self.replication_client = None
+        self.peer_replication_client = None
+    
     def start(self):
         # Start client socket server
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -179,9 +215,10 @@ class SocketServer:
             print(f"[SERVER] Peer: {self.peer_host}")
         print(f"[SERVER] Data: {self.db.data_dir}")
         print("Press Ctrl+C to stop")
-        # Check specific privileges
-        db_name = self.client_state.get('current_db', '')
-        table_name = params.get('table', '*')
+        
+        # Start replication components if configured
+        self._start_replication()
+        
         try:
             while self.running:
                 client_socket, address = self.server_socket.accept()
@@ -200,73 +237,66 @@ class SocketServer:
                     self.replication_client, self.tls_wrapper
                 )
                 handler.start()
-            )
-        
-        return True
-
-
-class SocketServer:
-    def __init__(self, host='0.0.0.0', port=9999, data_dir='./data',
-                 server_id=1, role='master', master_host=None, 
-                 replication_port=None, peer_host=None):
-        self.host = host
-        self.port = port
-        self.data_dir = data_dir
-        self.server_id = server_id
-        self.role = role
-        self.master_host = master_host
-        self.replication_port = replication_port
-        self.peer_host = peer_host
-        
-        # Replication state
-        self.is_slave = (role == 'slave')
-        self.is_master_master = (peer_host is not None)
-        
-        self.db = Database(data_dir, server_id)
-        self.authenticator = Authenticator(self.db)
-        self.server_socket = None
-        self.running = False
-        
-        # Replication components (initialized later)
-        self.replication_server = None
-        self.replication_client = None
-        self.peer_replication_client = None
-    
-    def start(self):
-        # Start client socket server
-        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.server_socket.bind((self.host, self.port))
-        self.server_socket.listen(5)
-        self.running = True
-        
-        print(f"[SERVER] Started on {self.host}:{self.port}")
-        print(f"[SERVER] Server ID: {self.server_id}")
-        print(f"[SERVER] Role: {self.role}")
-        if self.is_slave and self.master_host:
-            print(f"[SERVER] Master: {self.master_host}")
-        if self.is_master_master:
-            print(f"[SERVER] Peer: {self.peer_host}")
-        print(f"[SERVER] Data: {self.db.data_dir}")
-        print("Press Ctrl+C to stop")
-        
-        # Start replication components if configured
-        self._start_replication()
-        
-        try:
-            while self.running:
-                client_socket, address = self.server_socket.accept()
-                handler = ClientHandler(
-                    client_socket, address, self.db, self.authenticator,
-                    self.replication_client
-                )
-                handler.start()
         except KeyboardInterrupt:
             print("\nShutting down...")
         finally:
             self.stop()
     
     def _start_replication(self):
+        """Initialize replication components based on role."""
+        if self.replication_port:
+            self.replication_server = ReplicationServer(
+                self.db, self.replication_port
+            )
+            self.replication_server.start()
+            print(f"[REPLICATION] Server listening on port {self.replication_port}")
+        
+        if self.is_slave and self.master_host:
+            self.replication_client = ReplicationClient(
+                self.db, self.master_host, self.server_id
+            )
+            self.replication_client.start()
+            print(f"[REPLICATION] Connected to master {self.master_host}")
+        
+        if self.is_master_master and self.peer_host:
+            parts = self.peer_host.split(':')
+            peer_host = parts[0]
+            peer_port = int(parts[1]) if len(parts) > 1 else 9999
+            
+            self.peer_replication_client = ReplicationClient(
+                self.db, self.peer_host, self.server_id
+            )
+            self.peer_replication_client.start()
+            print(f"[REPLICATION] Connected to peer {self.peer_host}")
+    
+    def stop(self):
+        """Stop server and cleanup resources."""
+        self.running = False
+        
+        # Stop replication components
+        if self.replication_client:
+            print("[REPLICATION] Stopping replication client...")
+            self.replication_client.stop()
+        if self.peer_replication_client:
+            print("[REPLICATION] Stopping peer replication client...")
+            self.peer_replication_client.stop()
+        if self.replication_server:
+            print("[REPLICATION] Stopping replication server...")
+            self.replication_server.stop()
+        
+        if self.server_socket:
+            self.server_socket.close()
+        self.db.close()
+
+
+def setup_admin(db, username, password):
+    """Create or update admin user."""
+    auth = Authenticator(db)
+    success, message = auth.create_user(username, password, is_admin=True)
+    print(message)
+    return success
+
+
 def main():
     parser = argparse.ArgumentParser(description='LevelDB Socket Server with Replication and TLS')
     
@@ -298,10 +328,7 @@ def main():
                        help='Peer host:port for master-master replication')
     
     args = parser.parse_args()
-            parts = self.peer_host.split(':')
-            peer_host = parts[0]
-            peer_port = int(parts[1]) if len(parts) > 1 else 9999
-            
+    
     if args.prepare_admin:
         password = args.prepare_password
         if not password:
@@ -345,18 +372,7 @@ def main():
             print("\nTo generate a self-signed certificate, run:")
             print("  python server.py --generate-cert")
             sys.exit(1)
-        # Stop replication components
-        if self.replication_client:
-            print("[REPLICATION] Stopping replication client...")
-            self.replication_client.stop()
-        if self.peer_replication_client:
-            print("[REPLICATION] Stopping peer replication client...")
-            self.peer_replication_client.stop()
-        if self.replication_server:
-            print("[REPLICATION] Stopping replication server...")
-            self.replication_server.stop()
-        
-        self.db.close()
+    
     print("=" * 50)
     print("LevelDB Socket Server")
     print("=" * 50)
@@ -388,53 +404,6 @@ def main():
         replication_port=args.replication_port,
         peer_host=args.peer_host,
         tls_config=tls_config
-    )
-    server.start()
-                       help='Port for replication connections (optional)')
-    parser.add_argument('--peer-host', metavar='HOST:PORT',
-                       help='Peer host:port for master-master replication')
-    
-    args = parser.parse_args()
-    
-    if args.prepare_admin:
-        password = args.prepare_password
-        if not password:
-            password = getpass.getpass(f"Password for '{args.prepare_admin}': ")
-            confirm = getpass.getpass("Confirm: ")
-            if password != confirm:
-                print("ERROR: Passwords don't match!")
-                sys.exit(1)
-        
-        db = Database(args.data_dir)
-        setup_admin(db, args.prepare_admin, password)
-        db.close()
-        sys.exit(0)
-    
-    print("=" * 50)
-    print("LevelDB Socket Server")
-    print("=" * 50)
-    print(f"Host: {args.host}")
-    print(f"Port: {args.port}")
-    print(f"Server ID: {args.server_id}")
-    print(f"Role: {args.role}")
-    print(f"Data: {args.data_dir}")
-    if args.master_host:
-        print(f"Master: {args.master_host}")
-    if args.peer_host:
-        print(f"Peer: {args.peer_host}")
-    print("\nSetup admin:")
-    print(f"  python server.py --prepare_admin admin --prepare_password <pass>")
-    print("-" * 50)
-    
-    server = SocketServer(
-        host=args.host,
-        port=args.port,
-        data_dir=args.data_dir,
-        server_id=args.server_id,
-        role=args.role,
-        master_host=args.master_host,
-        replication_port=args.replication_port,
-        peer_host=args.peer_host
     )
     server.start()
 
