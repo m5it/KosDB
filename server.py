@@ -291,10 +291,9 @@ class SocketServer:
 
 def setup_admin(db, username, password):
     """Create or update admin user."""
-    auth = Authenticator(db)
-    success, message = auth.create_user(username, password, is_admin=True)
-    print(message)
-    return success
+    result = db.create_user(username, password, is_admin=True)
+    print(result)
+    return True
 
 
 def main():
