@@ -80,3 +80,19 @@
 [2026-07-10 18:02:34] CMD: python3 -m py_compile parser.py | SUCCESS: True | OUTPUT_LEN: 0
 [2026-07-10 18:03:38] CMD: python3 -m py_compile test_integration.py | SUCCESS: True | OUTPUT_LEN: 0
 [2026-07-10 18:05:01] CMD: ls -la | SUCCESS: True | OUTPUT_LEN: 1987
+[2026-07-11 14:27:34] CMD: python test_security.py | SUCCESS: False | OUTPUT_LEN: 9
+[2026-07-11 14:27:57] CMD: python3 test_security.py -v | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-11 14:28:03] CMD: bash -c python3 test_security.py 2>&1 | head -100 | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-11 14:28:11] CMD: bash -c python3 -c 'import test_security; print("Import successful")' | SUCCESS: True | OUTPUT_LEN: 18
+[2026-07-11 14:28:13] CMD: bash -c cd /home/t3ch/adata2/OurAI/playground/collecting_program_data/KosDB && python3 -m unittest test_security -v 2>&1 | head -80 | SUCCESS: True | OUTPUT_LEN: 4589
+[2026-07-11 14:28:24] CMD: bash -c cd /home/t3ch/adata2/OurAI/playground/collecting_program_data/KosDB && python3 -m unittest test_security -v 2>&1 | tail -30 | SUCCESS: True | OUTPUT_LEN: 1565
+[2026-07-11 14:28:48] CMD: bash -c cd /home/t3ch/adata2/OurAI/playground/collecting_program_data/KosDB && python3 -m unittest test_security -v 2>&1 | tail -40 | SUCCESS: True | OUTPUT_LEN: 2188
+[2026-07-11 14:28:55] CMD: bash -c cd /home/t3ch/adata2/OurAI/playground/collecting_program_data/KosDB && python3 -m unittest test_security -v 2>&1 | tail -20 | SUCCESS: True | OUTPUT_LEN: 1001
+[2026-07-11 14:29:31] CMD: bash -c cd /home/t3ch/adata2/OurAI/playground/collecting_program_data/KosDB && python3 -m unittest test_security -v 2>&1 | tail -30 | SUCCESS: True | OUTPUT_LEN: 1572
+[2026-07-11 14:29:52] CMD: bash -c cd /home/t3ch/adata2/OurAI/playground/collecting_program_data/KosDB && python3 -m unittest test_security -v 2>&1 | tail -30 | SUCCESS: True | OUTPUT_LEN: 909
+[2026-07-11 14:31:32] CMD: bash -c cd /home/t3ch/adata2/OurAI/playground/collecting_program_data/KosDB && python3 -m unittest test_security -v 2>&1 | tail -30 | SUCCESS: True | OUTPUT_LEN: 1612
+[2026-07-11 14:47:43] CMD: bash -c cd /home/t3ch/adata2/OurAI/playground/collecting_program_data/KosDB.test && python -m py_compile server.py 2>&1 | head -20 | SUCCESS: True | OUTPUT_LEN: 40
+[2026-07-11 14:47:46] CMD: bash -c cd /home/t3ch/adata2/OurAI/playground/collecting_program_data/KosDB.test && python3 -m py_compile server.py 2>&1 | head -20 | SUCCESS: True | OUTPUT_LEN: 68
+[2026-07-11 14:49:37] CMD: bash -c cd /home/t3ch/adata2/OurAI/playground/collecting_program_data/KosDB && find . -maxdepth 2 -type f -name '*.py' -o -name '*.md' -o -name '*.txt' -o -name '*.json' | sort | head -100 | SUCCESS: True | OUTPUT_LEN: 2088
+[2026-07-11 14:49:41] CMD: bash -c cd /home/t3ch/adata2/OurAI/playground/collecting_program_data/KosDB && ls -la *.py *.md 2>/dev/null | wc -l && echo '---' && ls test_*.py 2>/dev/null | wc -l | SUCCESS: True | OUTPUT_LEN: 11
+[2026-07-11 14:50:00] CMD: bash -c cd /home/t3ch/adata2/OurAI/playground/collecting_program_data/KosDB && grep -l "class.*Command" *_commands.py 2>/dev/null | head -20 && echo '---' && ls *_README.md 2>/dev/null | SUCCESS: True | OUTPUT_LEN: 432
