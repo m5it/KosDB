@@ -1,0 +1,69 @@
+{
+  "version": "2.1.0",
+  "description": "GPU-enabled configuration - optimized for AI/ML workloads with CUDA acceleration",
+  "server": {
+    "host": "0.0.0.0",
+    "port": 9999,
+    "data_dir": "/var/lib/kosdb/data",
+    "max_connections": 500,
+    "connection_timeout": 30,
+    "request_timeout": 300
+  },
+  "tls": {
+    "enabled": true,
+    "cert_file": "/etc/kosdb/certs/server.crt",
+    "key_file": "/etc/kosdb/certs/server.key",
+    "ca_file": "/etc/kosdb/certs/ca.crt",
+    "require_client_cert": false,
+    "ssl_version": "TLS"
+  },
+  "cache": {
+    "enabled": true,
+    "max_size": 5000,
+    "default_ttl": 300,
+    "invalidate_on_write": true
+  },
+  "gpu": {
+    "enabled": true,
+    "device_id": 0,
+    "memory_limit_mb": 8192,
+    "batch_size": 5000,
+    "use_mixed_precision": true
+  },
+  "fulltext": {
+    "enabled": true,
+    "stem": true,
+    "min_token_length": 2,
+    "custom_stop_words": []
+  },
+  "vector_search": {
+    "enabled": true,
+    "default_dimension": 768,
+    "metric": "cosine",
+    "use_gpu": true
+  },
+  "replication": {
+    "enabled": false,
+    "role": "master",
+    "slaves": [],
+    "replication_port": null
+  },
+  "failover": {
+    "enabled": false,
+    "node_id": "gpu_node",
+    "peers": [],
+    "raft_port": 9000
+  },
+  "monitoring": {
+    "enabled": true,
+    "http_port": 9090,
+    "metrics_path": "/metrics",
+    "health_path": "/health"
+  },
+  "logging": {
+    "level": "INFO",
+    "file": "/var/log/kosdb/server.log",
+    "max_size_mb": 100,
+    "backup_count": 5
+  }
+}
