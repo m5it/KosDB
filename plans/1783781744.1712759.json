@@ -1,0 +1,107 @@
+{
+  "id": "1783781744.1712759",
+  "title": "KosDB v2.3.0 \u2014 Operational Readiness & Enterprise Hardening",
+  "instructions": "Plan v2.3.0 for KosDB based on a full project review. v2.2.0 already delivered time-series, multi-tenancy, CDC, materialized views, security suite, geospatial, connection pooling, compression, and prepared statements. v2.3.0 should focus on operational readiness, enterprise hardening, and developer experience: (1) real SQL/PostgreSQL/MySQL wire-protocol compatibility, (2) automatic sharding and multi-region replication, (3) CRDT-based conflict resolution, (4) a built-in web admin dashboard / REST API, (5) query federation across external data sources, (6) vector quantization and FAISS/Annoy integration, (7) graph query support, (8) stored procedures/triggers, (9) backup scheduling and point-in-time recovery, and (10) comprehensive test runner and CI packaging. Create concrete tasks, then switch to build mode to implement them.",
+  "startTimestamp": 1783781744.1712782,
+  "endTimestamp": null,
+  "tasks": {
+    "1783781746.3936958": {
+      "id": "1783781746.3936958",
+      "status": "in_progress",
+      "instruction": "Implement PostgreSQL and MySQL wire-protocol compatibility so existing clients (psql, mysql CLI, ORMs) can connect. Add a protocol adapter module (sql_protocol.py) with message framing, authentication handshake, simple query execution, and resultset encoding. Add commands for protocol negotiation. Create test_sql_protocol.py. Update config.json with protocol ports. Update README.md and SQL_README.md.",
+      "startTimestamp": 1783781777.7169042,
+      "endTimestamp": null,
+      "log": [
+        {
+          "timestamp": 1783781777.7170522,
+          "text": "Build started"
+        }
+      ]
+    },
+    "1783781749.642774": {
+      "id": "1783781749.642774",
+      "status": "in_progress",
+      "instruction": "Implement automatic hash/range sharding across multiple KosDB nodes. Add shard_router.py for key-to-shard mapping, shard_manager.py for adding/removing shards and rebalancing, and multi-region replication hooks in replication.py. Support cross-region read replicas and shard-aware queries. Add commands: CREATE SHARD, REBALANCE SHARDS, SHOW SHARDS. Create test_sharding.py and update REPLICATION_README.md.",
+      "startTimestamp": 1783781993.4305434,
+      "endTimestamp": null,
+      "log": [
+        {
+          "timestamp": 1783781993.4306834,
+          "text": "Build started"
+        }
+      ]
+    },
+    "1783781752.592553": {
+      "id": "1783781752.592553",
+      "status": "pending",
+      "instruction": "Implement conflict-free replicated data types for last-write-wins registers, counters, sets, and maps. Add crdt.py with state-based merge semantics and vector clocks. Integrate with replication.py so multi-region writes can converge automatically. Add commands: CRDT INC, CRDT DEC, CRDT SET, CRDT GET, CRDT MERGE. Create test_crdt.py and add CRDT_README.md.",
+      "startTimestamp": null,
+      "endTimestamp": null,
+      "log": []
+    },
+    "1783781756.2965822": {
+      "id": "1783781756.2965822",
+      "status": "pending",
+      "instruction": "Add an embedded HTTP server (web_admin.py) providing a web dashboard and REST API. Expose endpoints: GET /api/databases, /api/tables, /api/metrics, /api/health, POST /api/query, /api/backup, /api/restore. Serve a static HTML/JS dashboard from a templates/ directory. Integrate with monitoring.py and auth.py for token-based API auth. Add config section for web admin. Create test_web_admin.py and WEB_ADMIN_README.md.",
+      "startTimestamp": null,
+      "endTimestamp": null,
+      "log": []
+    },
+    "1783781758.855169": {
+      "id": "1783781758.855169",
+      "status": "pending",
+      "instruction": "Implement federated query engine (federation.py) that can query external PostgreSQL, MySQL, SQLite, CSV, and REST APIs as virtual tables. Add virtual table registration, connection adapters, and query pushdown. Add commands: CREATE EXTERNAL TABLE, REGISTER CONNECTION, FEDERATED SELECT. Create test_federation.py and FEDERATION_README.md.",
+      "startTimestamp": null,
+      "endTimestamp": null,
+      "log": []
+    },
+    "1783781761.1414602": {
+      "id": "1783781761.1414602",
+      "status": "pending",
+      "instruction": "Extend vector_search.py to support product quantization (PQ), scalar quantization, and optional FAISS/Annoy backends with graceful fallback. Add vector index persistence, index warm-up, and batch search. Add commands: CREATE QUANTIZED INDEX, VECTOR SEARCH BATCH. Update VECTOR_SEARCH_README.md and create test_vector_quantization.py.",
+      "startTimestamp": null,
+      "endTimestamp": null,
+      "log": []
+    },
+    "1783781763.93352": {
+      "id": "1783781763.93352",
+      "status": "pending",
+      "instruction": "Add property graph model and Cypher-like query support. Implement graph_store.py with nodes/edges, adjacency indexes, and traversal algorithms (BFS/DFS, shortest path). Add Cypher parser subset: CREATE (n:Label), MATCH, RETURN, OPTIONAL MATCH, WITH. Add graph_commands.py and test_graph.py. Create GRAPH_README.md.",
+      "startTimestamp": null,
+      "endTimestamp": null,
+      "log": []
+    },
+    "1783781767.1642606": {
+      "id": "1783781767.1642606",
+      "status": "pending",
+      "instruction": "Implement stored procedure engine (procedures.py) with Python sandbox execution and a registry. Support CREATE PROCEDURE, CALL, DROP PROCEDURE. Add SQL triggers (BEFORE/AFTER INSERT/UPDATE/DELETE) with trigger_engine.py. Integrate with commands.py so triggers fire automatically. Create test_procedures.py, test_triggers.py, and PROCEDURES_README.md.",
+      "startTimestamp": null,
+      "endTimestamp": null,
+      "log": []
+    },
+    "1783781770.0416102": {
+      "id": "1783781770.0416102",
+      "status": "pending",
+      "instruction": "Build scheduler (backup_scheduler.py) for automated full/incremental backups with cron-like expressions. Integrate with write_ahead_log.py to support point-in-time recovery (PITR) by replaying WAL from a backup. Add commands: SCHEDULE BACKUP, LIST SCHEDULES, RESTORE PITR <timestamp>, SHOW WAL STATUS. Create test_backup_scheduler.py and BACKUP_README.md.",
+      "startTimestamp": null,
+      "endTimestamp": null,
+      "log": []
+    },
+    "1783781772.697752": {
+      "id": "1783781772.697752",
+      "status": "pending",
+      "instruction": "Replace run_tests.py with a comprehensive test runner that discovers and runs all test_*.py files, reports per-suite status, and generates JUnit XML. Add setup.py packaging metadata, a pyproject.toml, and GitHub Actions CI workflow (.github/workflows/ci.yml). Ensure all v2.2.0 tests still pass. Update TESTING.md and README.md build badges.",
+      "startTimestamp": null,
+      "endTimestamp": null,
+      "log": []
+    },
+    "1783781775.3428082": {
+      "id": "1783781775.3428082",
+      "status": "pending",
+      "instruction": "Update README.md to reflect v2.3.0 features and architecture. Update CHANGELOG.md with v2.3.0 release notes. Create a migration guide from v2.2.0 to v2.3.0. Verify config.json includes all new sections. Ensure all *_README.md files are consistent. Bump version strings in setup.py, config.json, and README.md.",
+      "startTimestamp": null,
+      "endTimestamp": null,
+      "log": []
+    }
+  }
+}

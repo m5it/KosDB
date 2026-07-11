@@ -145,7 +145,7 @@ class CommandParser:
                 
                 # Parse ORDER BY
                 if 'order_by' in params:
-                    params['order_desc'] = params.get('order_dir', 'ASC').upper() == 'DESC'
+                    params['order_desc'] = (params.get('order_dir') or 'ASC').upper() == 'DESC'
                 
                 return cmd_type, params
         
@@ -339,12 +339,17 @@ class BackupRestoreParser(CommandParser):
         if cmd_upper == 'PROMETHEUS':
             return 'PROMETHEUS', {}
         
-        # Try patterns
+        # Let the parent parser handle core SQL-like commands with full
+        # parameter processing (columns, values, WHERE, SET, ORDER BY).
+        parent_result = super().parse(command)
+        if parent_result[0] != 'UNKNOWN':
+            return parent_result
+        
+        # Extended patterns (backup/restore/distributed tx/failover/monitoring)
         for cmd_type, pattern in self.patterns.items():
             match = pattern.match(command)
             if match:
                 params = match.groupdict()
                 return cmd_type, params
         
-        # Fall back to parent parser
-        return super().parse(command)
+        return 'UNKNOWN', None

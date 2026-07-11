@@ -1,0 +1,116 @@
+{
+  "id": "1783784285.2853975",
+  "title": "INSERT and SELECT Value Correctness Testing",
+  "instructions": "Build and run a focused automated test suite that validates KosDB INSERT and SELECT behavior. The test must insert rows with various data types and edge cases, then SELECT them back and assert the returned values match exactly what was inserted.",
+  "startTimestamp": 1783784285.2854,
+  "endTimestamp": 1783786753.9732456,
+  "tasks": {
+    "1783784290.506002": {
+      "id": "1783784290.506002",
+      "status": "completed",
+      "instruction": "List all Python modules in the project root and map each to an existing test file. Identify modules without tests and command/parser modules that need tests. Output a coverage matrix in a new file tests/COVERAGE_MATRIX.md.",
+      "startTimestamp": 1783784414.3240554,
+      "endTimestamp": 1783784463.376499,
+      "log": [
+        {
+          "timestamp": 1783784414.324186,
+          "text": "Build started"
+        }
+      ]
+    },
+    "1783784290.5062008": {
+      "id": "1783784290.5062008",
+      "status": "completed",
+      "instruction": "Create test_parser.py, test_commands.py, test_database.py, test_binlog.py, test_failover.py, test_monitoring.py, test_sharding.py, test_backup_utils.py, and test_restore_commands.py. Each should test public functions/classes with mocked LevelDB where possible.",
+      "startTimestamp": 1783784416.3088312,
+      "endTimestamp": 1783784862.273787,
+      "log": [
+        {
+          "timestamp": 1783784416.3089674,
+          "text": "Build started"
+        }
+      ]
+    },
+    "1783784290.506626": {
+      "id": "1783784290.506626",
+      "status": "completed",
+      "instruction": "Create tests for each *_commands.py and *_parser.py module that lacks them (cdc, compression, geospatial, materialized_views, multitenant, pool, prepared_statements, security, sharding, sql_protocol, timeseries). Focus on command parsing, dispatching, and error handling.",
+      "startTimestamp": 1783784463.3765016,
+      "endTimestamp": 1783785292.4976234,
+      "log": []
+    },
+    "1783784290.5067303": {
+      "id": "1783784290.5067303",
+      "status": "completed",
+      "instruction": "Create tests/integration_harness.py that can start a server on a random free port, authenticate, run a sequence of commands, and stop the server. Use this in a new tests/test_integration_core.py covering auth, databases, tables, CRUD, transactions, and basic replication.",
+      "startTimestamp": 1783784862.2737894,
+      "endTimestamp": 1783786113.4535096,
+      "log": []
+    },
+    "1783784290.5068293": {
+      "id": "1783784290.5068293",
+      "status": "completed",
+      "instruction": "Run all test_*.py files using unittest discovery. Capture failures, fix bugs in tests or source code, and update run_tests.py to include all suites. Ensure the suite exits with proper status code.",
+      "startTimestamp": 1783785292.4976246,
+      "endTimestamp": 1783786132.8622377,
+      "log": []
+    },
+    "1783784379.7978933": {
+      "id": "1783784379.7978933",
+      "status": "completed",
+      "instruction": "Read tests/test_client.py, examples/python/leveldb_client.py, and the relevant server command handlers (commands.py, parser.py, database.py) to understand how INSERT and SELECT responses are formatted and how to assert value correctness from the socket protocol.",
+      "startTimestamp": 1783786113.4535108,
+      "endTimestamp": 1783786185.507195,
+      "log": [
+        {
+          "timestamp": 1783784461.6718943,
+          "text": "Created tests/COVERAGE_MATRIX.md mapping all 56 project-root Python modules to existing tests and identified 35 modules without dedicated tests."
+        },
+        {
+          "timestamp": 1783784860.485668,
+          "text": "Created 9 unit test files (test_parser.py, test_commands.py, test_database.py, test_binlog.py, test_failover.py, test_monitoring.py, test_sharding.py, test_backup_utils.py, test_restore_commands.py). Fixed source bugs in parser.py, sharding.py, monitoring.py, restore_commands.py, and renamed compression.py to compression_engine.py to avoid stdlib shadowing. All 109 new tests pass."
+        }
+      ]
+    },
+    "1783784379.7980926": {
+      "id": "1783784379.7980926",
+      "status": "completed",
+      "instruction": "Create tests/test_insert_select_values.py with a unittest class that starts a fresh server on a test port, authenticates, creates a database and table, inserts rows with integers, text, floats, booleans, and null-like values, then SELECTs back and asserts the returned values exactly match the inserted ones. Include edge cases: quoted strings, special characters, negative numbers, and multiple rows.",
+      "startTimestamp": 1783786132.8622386,
+      "endTimestamp": 1783786349.3387778,
+      "log": []
+    },
+    "1783784379.799372": {
+      "id": "1783784379.799372",
+      "status": "completed",
+      "instruction": "Execute the new test file against a clean server instance. If any assertion fails, inspect the response format and adjust the parsing/expected values until all tests pass. Clean up test data directories after the run.",
+      "startTimestamp": 1783786185.5071964,
+      "endTimestamp": 1783786359.147147,
+      "log": []
+    },
+    "1783784403.3568058": {
+      "id": "1783784403.3568058",
+      "status": "completed",
+      "instruction": "Read tests/test_client.py, examples/python/leveldb_client.py, and the relevant parts of server.py/commands.py to understand the socket protocol, authentication flow, and how INSERT/SELECT responses are formatted. Note how values are returned so assertions can compare them correctly.",
+      "startTimestamp": 1783786349.338779,
+      "endTimestamp": 1783786737.9981315,
+      "log": []
+    },
+    "1783784403.357092": {
+      "id": "1783784403.357092",
+      "status": "completed",
+      "instruction": "Create a new test file tests/test_insert_select_values.py that: connects to localhost:9999 as admin, creates a temporary database and table, inserts rows with INT, TEXT, FLOAT, NULL-like, and quoted string values, then runs SELECT * and targeted SELECT ... WHERE id=... queries and asserts the returned rows contain the exact inserted values. Include cleanup (DROP TABLE/DATABASE) at the end.",
+      "startTimestamp": 1783786359.1471481,
+      "endTimestamp": 1783786753.9732313,
+      "log": []
+    },
+    "1783784403.39517": {
+      "id": "1783784403.39517",
+      "status": "in_progress",
+      "instruction": "Run python tests/test_insert_select_values.py against a running KosDB server on localhost:9999. If the server is not running, start it first with the default data directory. Capture output, fix any assertion or protocol issues, and confirm all tests pass.",
+      "startTimestamp": 1783786737.998133,
+      "endTimestamp": null,
+      "log": []
+    }
+  }
+}

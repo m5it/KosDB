@@ -212,16 +212,18 @@ class Database:
         index_columns = []
         
         for col in columns:
-            col_upper = col.upper()
+            col_stripped = col.strip()
+            col_upper = col_stripped.upper()
+            # Extract just the column name (first whitespace-delimited token)
+            col_name = col_stripped.split()[0]
             if 'PRIMARY KEY' in col_upper:
-                primary_key = col.split()[0]
+                primary_key = col_name
                 parsed_columns.append(primary_key)
             elif 'INDEX' in col_upper:
-                idx_col = col.split()[0]
-                parsed_columns.append(idx_col)
-                index_columns.append(idx_col)
+                parsed_columns.append(col_name)
+                index_columns.append(col_name)
             else:
-                parsed_columns.append(col.strip())
+                parsed_columns.append(col_name)
         
         schema = {
             "columns": parsed_columns,
@@ -367,7 +369,9 @@ class Database:
         
         schema = json.loads(schema_data.decode())
         if columns is None or "*" in columns:
-            columns = ["id"] + schema["columns"]
+            columns = list(schema["columns"])
+            if "id" not in columns:
+                columns.insert(0, "id")
         
         results = []
         

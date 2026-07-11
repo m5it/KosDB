@@ -1,38 +1,44 @@
-# Plan: KosDB v2.2.0 - Advanced Features Release
-## ID: 1783778232.4285514
-## Created: 2026-07-11 13:57:12
+# Plan: INSERT and SELECT Value Correctness Testing
+## ID: 1783784285.2853975
+## Created: 2026-07-11 15:38:05
 ## Status: in_progress
 
 ### Goal:
-Implement advanced database features including query optimization, connection pooling, data compression, geospatial indexing, and time-series support. Focus on performance, scalability, and enterprise-grade features.
+Build and run a focused automated test suite that validates KosDB INSERT and SELECT behavior. The test must insert rows with various data types and edge cases, then SELECT them back and assert the returned values match exactly what was inserted.
 
-### Tasks (9):
-1. [pending] Query Plan Cache & Prepared Statements
-   ID: 1783778236.1165204
+### Tasks (11):
+1. [pending] Inventory modules and existing tests
+   ID: 1783784290.506002
 
-2. [pending] Connection Pooling & Connection Management
-   ID: 1783778247.9111686
+2. [pending] Create missing unit tests for core modules
+   ID: 1783784290.5062008
 
-3. [pending] Data Compression & Storage Optimization
-   ID: 1783778250.6317654
+3. [pending] Create tests for command and parser modules
+   ID: 1783784290.506626
 
-4. [pending] Geospatial Indexing & Spatial Queries
-   ID: 1783778261.978801
+4. [pending] Create integration test runner and server harness
+   ID: 1783784290.5067303
 
-5. [pending] Time-Series Data Support
-   ID: 1783778264.674676
+5. [pending] Run full test suite and fix failures
+   ID: 1783784290.5068293
 
-6. [pending] Multi-Tenant Support & Resource Isolation
-   ID: 1783778267.605036
+6. [pending] Inspect existing client tests and server command format
+   ID: 1783784379.7978933
 
-7. [pending] Change Data Capture (CDC) & Event Streaming
-   ID: 1783778270.8395822
+7. [pending] Write focused INSERT/SELECT correctness test
+   ID: 1783784379.7980926
 
-8. [pending] Query Rewriting & Materialized Views
-   ID: 1783778273.50278
+8. [pending] Run the test and verify all assertions pass
+   ID: 1783784379.799372
 
-9. [pending] Advanced Security Features
-   ID: 1783778275.7718377
+9. [pending] Inspect existing client tests and server command format
+   ID: 1783784403.3568058
+
+10. [pending] Write focused INSERT/SELECT correctness test
+   ID: 1783784403.357092
+
+11. [pending] Run the test and verify all assertions pass
+   ID: 1783784403.39517
 
 ---
 
