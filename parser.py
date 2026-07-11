@@ -97,6 +97,13 @@ class CommandParser:
             ),
             'EXECUTE': re.compile(
                 r'^\\s*EXECUTE\\s+(?P<name>\\w+)(?:\\s+USING\\s+(?P<params>.+))?$',
+            # Prepared statements (v3.3.0)
+            'PREPARE': re.compile(
+                r'^\\s*PREPARE\\s+(?P<name>\\w+)\\s+AS\\s+(?P<sql>.+)$',
+                re.IGNORECASE | re.DOTALL
+            ),
+            'EXECUTE': re.compile(
+                r'^\\s*EXECUTE\\s+(?P<name>\\w+)(?:\\s+USING\\s+(?P<params>.+))?$',
                 re.IGNORECASE
             ),
             'DEALLOCATE': re.compile(
@@ -105,196 +112,253 @@ class CommandParser:
             ),
             'DEALLOCATE_ALL': re.compile(
                 r'^\\s*DEALLOCATE\\s+ALL\\s*$',
+            # Triggers (v3.4.0)
+            'CREATE_TRIGGER': re.compile(
+                r'^\\s*CREATE\\s+TRIGGER\\s+(?P<name>\\w+)\\s+'
+                r'(?P<timing>BEFORE|AFTER|INSTEAD\\s+OF)\\s+'
+                r'(?P<event>INSERT|UPDATE|DELETE|TRUNCATE)\\s+'
+                r'ON\\s+(?P<table>\\w+)'
+                r'(?:\\s+OF\\s+(?P<columns>[\\w\\s,]+))?'
+                r'\\s+(?P<level>FOR\\s+EACH\\s+(?:ROW|STATEMENT))'
+                r'(?:\\s+WHEN\\s*\\((?P<when>[^)]+)\\))?'
+                r'\\s+EXECUTE\\s+(?:FUNCTION|PROCEDURE)?\\s*(?P<action>.+)$',
+                re.IGNORECASE | re.DOTALL
+            ),
+            'DROP_TRIGGER': re.compile(
+                r'^\\s*DROP\\s+TRIGGER\\s+(?P<name>\\w+)(?:\\s+ON\\s+(?P<table>\\w+))?\\s*$',
                 re.IGNORECASE
             ),
-        }
+            'ENABLE_TRIGGER': re.compile(
+                r'^\\s*ALTER\\s+TRIGGER\\s+(?P<name>\\w+)\\s+ENABLE\\s*$',
                 re.IGNORECASE
             ),
-        }
-    
-    def parse(self, sql: str) -> Tuple[str, Dict[str, Any]]:
-        """
-        Parse SQL-like command and return command type and parameters.
-        """
-        sql = sql.strip()
+            'DISABLE_TRIGGER': re.compile(
+                r'^\\s*ALTER\\s+TRIGGER\\s+(?P<name>\\w+)\\s+DISABLE\\s*$',
+                re.IGNORECASE
+            ),
+            # Procedures (v3.4.0)
+            'CREATE': re.compile(
+                r'^\\s*CREATE\\s+TABLE\\s+(?P<table>\\w+)\\s*\\((?P<columns>[^)]+)\\)'
+                r'(?:\\s+PARTITION\\s+BY\\s+(?P<partition_type>RANGE|LIST|HASH)(?:\\s+COLUMNS)?'
+                r'\\s*\\((?P<partition_key>[^)]+)\\)\\s*\\((?P<partitions>[^)]+)\\))?'
+                r'\\s*$',
+            'CREATE': re.compile(
+                r'^\\s*CREATE\\s+TABLE\\s+(?P<table>\\w+)\\s*\\((?P<columns>[^)]+)\\)'
+                r'(?:\\s+PARTITION\\s+BY\\s+(?P<partition_type>RANGE|LIST|HASH)(?:\\s+COLUMNS)?'
+                r'\\s*\\((?P<partition_key>[^)]+)\\)\\s*\\((?P<partitions>[^)]+)\\))?'
+                r'\\s*$',
+                re.IGNORECASE | re.DOTALL
+            ),
+            # Partition management (v3.4.0)
+            'ALTER_TABLE_ADD_PARTITION': re.compile(
+                r'^\\s*ALTER\\s+TABLE\\s+(?P<table>\\w+)\\s+ADD\\s+PARTITION\\s+(?P<definition>.+)$',
+                re.IGNORECASE | re.DOTALL
+            ),
+            'ALTER_TABLE_DROP_PARTITION': re.compile(
+                r'^\\s*ALTER\\s+TABLE\\s+(?P<table>\\w+)\\s+DROP\\s+PARTITION\\s+(?P<partition>\\w+)\\s*$',
+                re.IGNORECASE
+            ),
+            'ALTER_TABLE_TRUNCATE_PARTITION': re.compile(
+                r'^\\s*ALTER\\s+TABLE\\s+(?P<table>\\w+)\\s+TRUNCATE\\s+PARTITION\\s+(?P<partition>\\w+)\\s*$',
+                re.IGNORECASE
+            ),
+            # Partition management (v3.4.0)
+            'ALTER_TABLE_ADD_PARTITION': re.compile(
+                r'^\\s*ALTER\\s+TABLE\\s+(?P<table>\\w+)\\s+ADD\\s+PARTITION\\s+(?P<definition>.+)$',
+                re.IGNORECASE | re.DOTALL
+            ),
+            'ALTER_TABLE_DROP_PARTITION': re.compile(
+                r'^\\s*ALTER\\s+TABLE\\s+(?P<table>\\w+)\\s+DROP\\s+PARTITION\\s+(?P<partition>\\w+)\\s*$',
+                re.IGNORECASE
+            ),
+            'ALTER_TABLE_TRUNCATE_PARTITION': re.compile(
+                r'^\\s*ALTER\\s+TABLE\\s+(?P<table>\\w+)\\s+TRUNCATE\\s+PARTITION\\s+(?P<partition>\\w+)\\s*$',
+                re.IGNORECASE
+            ),
+            'EXCHANGE_PARTITION': re.compile(
+                r'^\\s*ALTER\\s+TABLE\\s+(?P<table>\\w+)\\s+EXCHANGE\\s+PARTITION\\s+(?P<partition>\\w+)'
+                r'\\s+WITH\\s+TABLE\\s+(?P<other_table>\\w+)\\s*$',
+                re.IGNORECASE
+            ),
+            'SHOW_PARTITIONS': re.compile(
+                r'^\\s*SHOW\\s+PARTITIONS\\s+(?:FROM\\s+)?(?P<table>\\w+)\\s*$',
+                re.IGNORECASE
+            ),
+            # Advanced indexes (v3.4.0)
+            'CREATE_ADVANCED_INDEX': re.compile(
+                r'^\\s*CREATE\\s+(?:(?P<unique>UNIQUE)\\s+)?INDEX\\s+(?P<name>\\w+)\\s+'
+                r'ON\\s+(?P<table>\\w+)\\s*\\((?P<columns>[^)]+)\\)'
+                r'(?:\\s+WHERE\\s+(?P<where>[^)]+))?'
+                r'(?:\\s+INCLUDE\\s*\\((?P<include>[^)]+)\\))?\\s*$',
+                re.IGNORECASE | re.DOTALL
+            ),
+            # Materialized views (v3.4.0)
+            'CREATE_MATERIALIZED_VIEW': re.compile(
+                r'^\\s*CREATE\\s+MATERIALIZED\\s+VIEW\\s+(?P<name>\\w+)'
+                r'(?:\\s+BUILD\\s+(?P<build>IMMEDIATE|DEFERRED))?'
+                r'(?:\\s+REFRESH\\s+(?P<refresh>FAST|COMPLETE|FORCE|ON\\s+DEMAND|ON\\s+COMMIT))?'
+                r'(?:\\s*(?P<rewrite>ENABLE|DISABLE)\\s+QUERY\\s+REWRITE)?'
+                r'\\s+AS\\s+(?P<query>.+)$',
+                re.IGNORECASE | re.DOTALL
+            ),
+            'REFRESH_MATERIALIZED_VIEW': re.compile(
+                r'^\\s*REFRESH\\s+MATERIALIZED\\s+VIEW'
+                r'(?:\\s+(?P<concurrently>CONCURRENTLY))?'
+                r'\\s+(?P<name>\\w+)\\s*$',
+                re.IGNORECASE
+            ),
+            'DROP_MATERIALIZED_VIEW': re.compile(
+                r'^\\s*DROP\\s+MATERIALIZED\\s+VIEW\\s+(?P<name>\\w+)\\s*$',
+                re.IGNORECASE
+            ),
+            'SHOW_MATERIALIZED_VIEWS': re.compile(
+                r'^\\s*SHOW\\s+MATERIALIZED\\s+VIEWS\\s*$',
+                re.IGNORECASE
+            ),
+            params['columns'] = [c.strip() for c in params['columns'].split(',')]
         
-        # Check for CTE (WITH clause) - v3.3.0
-        cte_match = self._parse_cte(sql)
-        if cte_match:
-            return cte_match
+        # Normalize level
+        if params.get('level'):
+            params['level'] = params['level'].upper().replace(' ', '_')
         
-        # Check for MATCH ... AGAINST first
-        match_against = self._parse_match_against(sql)
-        if match_against:
-            return match_against
+        return params
+            # Materialized views (v3.4.0)
+            'CREATE_MATERIALIZED_VIEW': re.compile(
+                r'^\\s*CREATE\\s+MATERIALIZED\\s+VIEW\\s+(?P<name>\\w+)'
+                r'(?:\\s+BUILD\\s+(?P<build>IMMEDIATE|DEFERRED))?'
+                r'(?:\\s+REFRESH\\s+(?P<refresh>FAST|COMPLETE|FORCE|ON\\s+DEMAND|ON\\s+COMMIT))?'
+                r'(?:\\s*(?P<rewrite>ENABLE|DISABLE)\\s+QUERY\\s+REWRITE)?'
+                r'\\s+AS\\s+(?P<query>.+)$',
+                re.IGNORECASE | re.DOTALL
+            ),
+            'REFRESH_MATERIALIZED_VIEW': re.compile(
+                r'^\\s*REFRESH\\s+MATERIALIZED\\s+VIEW'
+                r'(?:\\s+(?P<concurrently>CONCURRENTLY))?'
+                r'\\s+(?P<name>\\w+)\\s*$',
+                re.IGNORECASE
+            ),
+            # Parallel query hints (v3.4.0)
+            'SELECT_PARALLEL': re.compile(
+                r'^\\s*SELECT\\s+/\\*\\+\\s*PARALLEL\\s*\\((?P<dop>\\d+)\\)\\s*\\*/'
+                r'\\s+(?P<columns>.*?)\\s+FROM\\s+(?P<table>\\w+)'
+                r'(?:\\s+WHERE\\s+(?P<where>.+))?$',
+                re.IGNORECASE | re.DOTALL
+            ),
+            # Foreign Data Wrappers (v3.4.0)
+            'CREATE_SERVER': re.compile(
+                r'^\\s*CREATE\\s+SERVER\\s+(?P<name>\\w+)\\s+'
+                r'FOREIGN\\s+DATA\\s+WRAPPER\\s+(?P<fdw_type>\\w+)'
+                r'(?:\\s+OPTIONS\\s*\\((?P<options>[^)]+)\\))?\\s*$',
+                re.IGNORECASE
+            ),
+            'CREATE_USER_MAPPING': re.compile(
+                r'^\\s*CREATE\\s+USER\\s+MAPPING\\s+FOR\\s+(?P<local_user>\\w+)\\s+'
+                r'SERVER\\s+(?P<server>\\w+)'
+                r'(?:\\s+OPTIONS\\s*\\((?P<options>[^)]+)\\))?\\s*$',
+                re.IGNORECASE
+            ),
+            'CREATE_FOREIGN_TABLE': re.compile(
+                r'^\\s*CREATE\\s+FOREIGN\\s+TABLE\\s+(?P<name>\\w+)\\s*'
+                r'\\((?P<columns>[^)]+)\\)\\s+'
+                r'SERVER\\s+(?P<server>\\w+)'
+                r'(?:\\s+OPTIONS\\s*\\((?P<options>[^)]+)\\))?\\s*$',
+                re.IGNORECASE | re.DOTALL
+            ),
+            'IMPORT_FOREIGN_SCHEMA': re.compile(
+                r'^\\s*IMPORT\\s+FOREIGN\\s+SCHEMA\\s+(?P<remote_schema>\\w+)\\s+'
+                r'FROM\\s+SERVER\\s+(?P<server>\\w+)\\s+'
+                r'INTO\\s+(?P<local_schema>\\w+)'
+                r'(?:\\s+LIMIT\\s+TO\\s*\\((?P<tables>[^)]+)\\))?\\s*$',
+                re.IGNORECASE
+            ),
+            'DROP_SERVER': re.compile(
+                r'^\\s*DROP\\s+SERVER\\s+(?P<name>\\w+)'
+                r'(?:\\s+(?P<cascade>CASCADE))?\\s*$',
+                re.IGNORECASE
+            ),
+                    ctes.append(cte)
+            # Query hints (v3.4.0)
+            'SELECT_WITH_HINTS': re.compile(
+                r'^\\s*SELECT\\s+/\\*\\+\\s*(?P<hints>[^*]+)\\*/'
+                r'\\s+(?P<columns>.*?)\\s+FROM\\s+(?P<table>\\w+)'
+                r'(?:\\s+WHERE\\s+(?P<where>.+))?$',
+                re.IGNORECASE | re.DOTALL
+            ),
+            # Event Scheduler (v3.4.0)
+            'CREATE_EVENT': re.compile(
+                r'^\\s*CREATE\\s+EVENT\\s+(?P<name>\\w+)\\s+'
+                r'ON\\s+SCHEDULE\\s+'
+                r'(?:(?P<recurring>EVERY\\s+(?P<interval>\\d+)\\s+(?P<unit>\\w+))'
+                r'|(?P<at>AT\\s+[^\\s]+))'
+                r'(?:\\s+STARTS\\s+(?P<starts>[^\\s]+))?'
+                r'(?:\\s+ENDS\\s+(?P<ends>[^\\s]+))?'
+                r'(?:\\s+ON\\s+COMPLETION\\s+(?P<completion>PRESERVE|DELETE))?'
+                r'(?:\\s+(?P<status>ENABLED|DISABLED))?'
+                r'\\s+DO\\s+(?P<action>.+)$',
+                re.IGNORECASE | re.DOTALL
+            ),
+            'ALTER_EVENT': re.compile(
+                r'^\\s*ALTER\\s+EVENT\\s+(?P<name>\\w+)'
+                r'(?:\\s+RENAME\\s+TO\\s+(?P<new_name>\\w+))?'
+                r'(?:\\s+ON\\s+SCHEDULE\\s+(?P<schedule>.+?))?'
+                r'(?:\\s+(?P<event_status>ENABLED|DISABLED))?'
+                r'(?:\\s+COMMENT\\s+\\'(?P<comment>[^\\']+)\\')?\\s*$',
+                re.IGNORECASE | re.DOTALL
+            ),
+            'DROP_EVENT': re.compile(
+                r'^\\s*DROP\\s+EVENT\\s+(?P<name>\\w+)'
+                r'(?:\\s+(?P<if_exists>IF\\s+EXISTS))?\\s*$',
+                re.IGNORECASE
+            ),
+            'SHOW_EVENTS': re.compile(
+                r'^\\s*SHOW\\s+EVENTS'
+                r'(?:\\s+FROM\\s+(?P<schema>\\w+))?'
+                r'(?:\\s+LIKE\\s+\\'(?P<pattern>[^\\']+)\\')?'
+                r'(?:\\s+WHERE\\s+(?P<where>.+))?\\s*$',
+                re.IGNORECASE
+            ),
+            'SHOW_EVENT_STATUS': re.compile(
+                r'^\\s*SHOW\\s+EVENT\\s+STATUS'
+                r'(?:\\s+LIKE\\s+\\'(?P<pattern>[^\\']+)\\')?\\s*$',
+                re.IGNORECASE
+            ),
+        Parse SQL command and return command type and parameters.
+        
+        Supports query hints in /*+ ... */ format.
+        """
+        # Extract hints first
+        sql, hints = self._extract_hints(sql)
         
         # Try each pattern
         for cmd_type, pattern in self.patterns.items():
             match = pattern.match(sql)
             if match:
                 params = match.groupdict()
-                
-                # Handle ALTER specially
-                if cmd_type == 'ALTER':
-                    return self.parse_alter_spec(params['table'], params['alter_spec'])
-                if 'limit' in params and params['limit']:
-                    params['limit'] = int(params['limit'])
-                
-                # Handle prepared statement parameters
-                if cmd_type == 'EXECUTE' and 'params' in params and params['params']:
-                    params['parameters'] = self._parse_execute_parameters(params['params'])
-                
+                params['hints'] = hints  # Add hints to params
                 return cmd_type, params
         
-        # Check for simple commands
-        sql_upper = sql.upper()
-        if sql_upper == 'QUIT' or sql_upper == 'EXIT':
-            return 'QUIT', {}
-        
-        # Check for DEALLOCATE ALL
-        if sql_upper == 'DEALLOCATE ALL':
-            return 'DEALLOCATE_ALL', {}
-        
-        return 'UNKNOWN', {'sql': sql}
+        raise ValueError(f"Unknown SQL command: {sql[:50]}...")
     
-    def _parse_execute_parameters(self, params_str: str) -> Union[List[Any], Dict[str, Any]]:
-        """Parse parameters for EXECUTE ... USING."""
-        params_str = params_str.strip()
-        
-        # Check for named parameters (key=value)
-        if '=' in params_str and not params_str.startswith('('):
-            result = {}
-            for pair in params_str.split(','):
-                pair = pair.strip()
-                if '=' in pair:
-                    key, value = pair.split('=', 1)
-                    result[key.strip()] = self._parse_value(value.strip())
-            return result
-        
-        # Positional parameters
-        if params_str.startswith('(') and params_str.endswith(')'):
-            params_str = params_str[1:-1]
-        
-        values = []
-        for val in params_str.split(','):
-            values.append(self._parse_value(val.strip()))
-        
-        return values
-        import re
-        
-        # Match WITH [RECURSIVE] clause
-        cte_pattern = re.compile(
-            r'^\\s*WITH\\s+(RECURSIVE\\s+)?(.+?)\\s+SELECT\\s+',
-            re.IGNORECASE | re.DOTALL
-        )
-        
-        match = cte_pattern.match(sql)
-        if not match:
-            return None
-        
-        is_recursive = bool(match.group(1))
-        cte_part = match.group(2).strip()
-        
-        # Parse CTE definitions
-        ctes = self._parse_cte_definitions(cte_part, is_recursive)
-        
-        if not ctes:
-            return None
-        
-        # Extract main query (after CTE definitions)
-        main_query_match = re.search(
-            r'SELECT\\s+(.+)$',
-            sql,
-            re.IGNORECASE | re.DOTALL
-        )
-        
-        main_query = main_query_match.group(1) if main_query_match else None
-        
-        return 'SELECT_WITH_CTE', {
-            'ctes': ctes,
-            'is_recursive': is_recursive,
-            'main_query': main_query,
-            'raw_sql': sql
-        }
-    
-    def _parse_cte_definitions(self, cte_part: str, is_recursive: bool) -> List[Dict[str, Any]]:
-        """Parse individual CTE definitions from WITH clause."""
-        ctes = []
-        current_cte = ""
-        paren_depth = 0
-        
-        for char in cte_part:
-            if char == '(':
-                paren_depth += 1
-                current_cte += char
-            elif char == ')':
-                paren_depth -= 1
-                current_cte += char
-            elif char == ',' and paren_depth == 0:
-                # End of CTE
-                cte = self._parse_single_cte(current_cte.strip(), is_recursive)
-                if cte:
-                    ctes.append(cte)
-                current_cte = ""
-            else:
-                current_cte += char
-        
-        # Last CTE
-        if current_cte.strip():
-            cte = self._parse_single_cte(current_cte.strip(), is_recursive)
-            if cte:
-                ctes.append(cte)
-        
-        return ctes
-    
-    def _parse_single_cte(self, cte_str: str, is_recursive: bool) -> Optional[Dict[str, Any]]:
-        """Parse a single CTE definition."""
-        import re
-        
-        # Pattern: name [(cols)] AS (query)
-        pattern = r'^(\\w+)\\s*(?:\\(([^)]+)\\))?\\s+AS\\s*\\((.+)\\)$'
-        match = re.match(pattern, cte_str.strip(), re.IGNORECASE | re.DOTALL)
-        
-        if not match:
-            return None
-        
-        name = match.group(1)
-        columns = None
-        if match.group(2):
-            columns = [c.strip() for c in match.group(2).split(',')]
-        
-        query_str = match.group(3).strip()
-        
-        # Check for recursive UNION/UNION ALL
-        cte_info = {
-            'name': name,
-            'columns': columns,
-            'is_recursive': False,
-            'query': query_str
-        }
-        
-        if is_recursive:
-            union_pattern = r'(.+?)\\s+UNION\\s+(?:ALL\\s+)?(.+)'
-            union_match = re.match(union_pattern, query_str, re.IGNORECASE | re.DOTALL)
-            
-            if union_match:
-                cte_info['is_recursive'] = True
-                cte_info['anchor_query'] = union_match.group(1).strip()
-                cte_info['recursive_query'] = union_match.group(2).strip()
-        
-        return cte_info
-        return result
-    
-    def _parse_where_clause(self, where_str: str) -> Dict[str, Any]:
+    def _extract_hints(self, sql: str) -> Tuple[str, Set[str]]:
         """
-        Parse WHERE clause with support for subqueries.
+        Extract query hints from SQL comment.
         
-        Supports:
-        - Simple conditions: col = value
-        - IN/NOT IN subqueries: col IN (SELECT ...)
-        - EXISTS/NOT EXISTS: EXISTS (SELECT ...)
-        - Scalar subqueries: col = (SELECT ...)
+        Returns:
+            Tuple of (sql_without_hints, set_of_hints)
         """
+        hint_pattern = re.compile(r'/\\*\\+\\s*(.+?)\\s*\\*/')
+        
+        hints = set()
+        
+        def extract_hint(match):
+            hint_text = match.group(1)
+            for hint in hint_text.split():
+                hints.add(hint.upper().strip())
+            return ''  # Remove hint from SQL
+        
+        cleaned_sql = hint_pattern.sub(extract_hint, sql)
+        
+        return cleaned_sql, hints
         where_str = where_str.strip()
         conditions = []
         

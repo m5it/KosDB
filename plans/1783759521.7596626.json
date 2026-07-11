@@ -1,0 +1,86 @@
+{
+  "id": "1783759521.7596626",
+  "title": "KosDB v3.4.0 - Advanced Database Features",
+  "instructions": "Implement advanced enterprise-grade database features for KosDB v3.4.0: database triggers, stored procedures with control flow, table partitioning, advanced indexing (composite, partial, expression), materialized views, query parallelization, and foreign data wrappers. Build upon the solid v3.3.0 foundation with window functions, CTEs, and prepared statements.",
+  "startTimestamp": 1783759521.7596653,
+  "endTimestamp": 1783761473.0975943,
+  "tasks": {
+    "1783759525.8475387": {
+      "id": "1783759525.8475387",
+      "status": "completed",
+      "instruction": "Implement SQL triggers (BEFORE/AFTER INSERT/UPDATE/DELETE) with support for row-level and statement-level triggers. Create trigger_engine.py module with trigger registration, execution context, and trigger chaining. Update parser.py to parse CREATE TRIGGER syntax. Modify commands.py to execute triggers during DML operations. Create test_triggers.py with comprehensive tests covering trigger cascades and recursive triggers prevention.",
+      "startTimestamp": 1783759596.7407596,
+      "endTimestamp": 1783759725.9541523,
+      "log": [
+        {
+          "timestamp": 1783759596.740882,
+          "text": "Build started"
+        }
+      ]
+    },
+    "1783759529.923994": {
+      "id": "1783759529.923994",
+      "status": "completed",
+      "instruction": "Implement stored procedures with control flow (IF/ELSE, WHILE, FOR loops), variables, and exception handling. Create procedure_engine.py with procedure compilation and execution. Add support for CALL statement. Update parser.py to parse CREATE PROCEDURE syntax with BEGIN/END blocks. Modify commands.py to execute stored procedures. Create test_procedures.py with tests for complex control flow and error handling.",
+      "startTimestamp": 1783759725.954154,
+      "endTimestamp": 1783759897.617891,
+      "log": []
+    },
+    "1783759533.9739757": {
+      "id": "1783759533.9739757",
+      "status": "completed",
+      "instruction": "Implement table partitioning (RANGE, LIST, HASH) for large tables. Create partition_manager.py to handle partition creation, pruning, and maintenance. Support partition-wise joins and partition elimination in query optimizer. Update parser.py to parse CREATE TABLE ... PARTITION BY syntax. Modify query_optimizer.py for partition pruning. Create test_partitioning.py with tests for all partition types and maintenance operations.",
+      "startTimestamp": 1783759897.617892,
+      "endTimestamp": 1783760075.0212631,
+      "log": []
+    },
+    "1783759538.1139817": {
+      "id": "1783759538.1139817",
+      "status": "completed",
+      "instruction": "Implement advanced indexing features: composite indexes (multiple columns), partial indexes (with WHERE clause), expression indexes (on computed expressions), and covering indexes. Create advanced_index.py module. Update parser.py to parse complex index definitions. Modify query_optimizer.py to utilize advanced indexes for query planning. Create test_advanced_indexes.py with comprehensive tests for index selection and query planning.",
+      "startTimestamp": 1783760075.021264,
+      "endTimestamp": 1783760231.7987216,
+      "log": []
+    },
+    "1783759542.1014855": {
+      "id": "1783759542.1014855",
+      "status": "completed",
+      "instruction": "Implement materialized views with fast refresh, incremental refresh, and manual refresh capabilities. Create materialized_view_manager.py with refresh strategies and staleness tracking. Support REFRESH MATERIALIZED VIEW command. Update parser.py to parse CREATE MATERIALIZED VIEW. Modify commands.py for query rewrite to use materialized views. Create test_materialized_views.py with tests for refresh strategies and query rewrite.",
+      "startTimestamp": 1783760231.7987223,
+      "endTimestamp": 1783760448.4692004,
+      "log": []
+    },
+    "1783759555.4665122": {
+      "id": "1783759555.4665122",
+      "status": "completed",
+      "instruction": "Implement query parallelization for large table scans and aggregations. Create parallel_executor.py with worker pool management, result merging, and load balancing. Support parallel scan, parallel aggregation, and parallel join operations. Update query_optimizer.py to generate parallel execution plans when beneficial. Modify database.py to support parallel query execution. Create test_parallel_execution.py with tests for correctness and performance improvement.",
+      "startTimestamp": 1783760448.4692013,
+      "endTimestamp": 1783760646.584964,
+      "log": []
+    },
+    "1783759563.6658118": {
+      "id": "1783759563.6658118",
+      "status": "completed",
+      "instruction": "Implement Foreign Data Wrappers for accessing external data sources (PostgreSQL, MySQL, CSV files, REST APIs). Create fdw_manager.py with connection management to external sources and data type mapping. Support CREATE FOREIGN TABLE and IMPORT FOREIGN SCHEMA. Update parser.py to parse FDW syntax. Modify query_optimizer.py to push down predicates to external sources when possible. Create test_fdw.py with tests for different external data sources and query pushdown.",
+      "startTimestamp": 1783760646.5849648,
+      "endTimestamp": 1783760823.7533278,
+      "log": []
+    },
+    "1783759567.5029297": {
+      "id": "1783759567.5029297",
+      "status": "completed",
+      "instruction": "Implement advanced query rewrite capabilities: view merging, predicate pushdown, subquery unnesting, and join reordering. Create query_rewrite.py module with transformation rules. Integrate with query_optimizer.py to apply rewrites before cost-based optimization. Support automatic rewrite hints. Update parser.py to parse query hints. Create test_query_rewrite.py with tests for each rewrite transformation and performance improvement verification.",
+      "startTimestamp": 1783760823.753329,
+      "endTimestamp": 1783761042.7584765,
+      "log": []
+    },
+    "1783759571.1420918": {
+      "id": "1783759571.1420918",
+      "status": "completed",
+      "instruction": "Implement database event scheduler for automated tasks (recurring jobs, one-time events). Create event_scheduler.py with cron-like scheduling, event history tracking, and failure handling. Support CREATE EVENT, ALTER EVENT, DROP EVENT commands. Update parser.py to parse event DDL. Modify commands.py to execute scheduled events. Create test_events.py with tests for recurring events, event failures, and event history.",
+      "startTimestamp": 1783761042.7584772,
+      "endTimestamp": 1783761473.0975845,
+      "log": []
+    }
+  }
+}

@@ -1,6 +1,6 @@
-# KosDB v3.3.0
+# KosDB v3.4.0
 
-A high-performance, feature-rich LevelDB-based database server with SQL-like interface, replication, TLS encryption, GPU acceleration, comprehensive audit logging, advanced query capabilities, window functions, CTEs, and prepared statements.
+A high-performance, feature-rich LevelDB-based database server with SQL-like interface, replication, TLS encryption, GPU acceleration, comprehensive audit logging, advanced query capabilities, window functions, CTEs, prepared statements, and automated event scheduling.
 
 ## Features
 
@@ -13,13 +13,20 @@ A high-performance, feature-rich LevelDB-based database server with SQL-like int
 - **Views**: Virtual tables based on SELECT queries
 - **Subqueries**: Scalar, IN/NOT IN, EXISTS/NOT EXISTS, correlated subqueries
 
-### Advanced SQL (New in v3.3.0)
+### Event Scheduler (New in v3.4.0)
+- **Automated Tasks**: Schedule recurring and one-time events
+- **Cron-like Scheduling**: EVERY 1 DAY, EVERY 1 HOUR, AT specific timestamp
+- **Event History**: Track execution history with 10,000 entry limit
+- **Failure Handling**: Automatic retries with configurable limits
+- **Event Management**: CREATE EVENT, ALTER EVENT, DROP EVENT, ENABLE/DISABLE
+
+### Advanced SQL (v3.3.0+)
 - **Window Functions**: ROW_NUMBER, RANK, DENSE_RANK, LEAD, LAG, FIRST_VALUE, LAST_VALUE
 - **Common Table Expressions (CTEs)**: Recursive and non-recursive WITH clauses
 - **Prepared Statements**: PREPARE, EXECUTE, DEALLOCATE with parameter binding
 - **SQL Injection Prevention**: Secure parameter binding with proper escaping
 
-### Security (New in v3.1.0+)
+### Security (v3.1.0+)
 - **TLS/SSL Encryption**: Secure client-server communication
   - Certificate-based authentication
   - Self-signed certificate generation
@@ -45,14 +52,14 @@ A high-performance, feature-rich LevelDB-based database server with SQL-like int
 - **Async Replication**: Non-blocking replication
 - **Replication Lag Monitoring**: Track replication health
 
-### Query Optimization (New in v3.2.0)
+### Query Optimization (v3.2.0+)
 - **Query Plan Caching**: LRU cache for parsed execution plans
 - **Cost-Based Optimizer**: Statistics-driven plan selection
 - **Semi-Join Optimization**: Efficient IN/EXISTS subquery execution
 - **Index Advisor**: Automatic index recommendations
 - **Query Statistics**: Execution metrics and profiling
 
-### Advanced SQL (New in v3.2.0)
+### Advanced SQL (v3.2.0+)
 - **CHECK Constraints**: Data validation with complex expressions
 - **Foreign Keys**: Referential integrity with CASCADE/SET NULL/RESTRICT
 - **ALTER TABLE**: Add/drop/modify columns, indexes, constraints
@@ -70,7 +77,7 @@ A high-performance, feature-rich LevelDB-based database server with SQL-like int
 - **Plan Caching**: Execution plan cache for repeated queries
 - **Compression**: Multiple algorithms (gzip, lz4, zstd)
 
-### Monitoring (New in v3.2.0)
+### Monitoring (v3.2.0+)
 - **Prometheus Metrics**: Query counts, latency, cache hit rates
 - **Health Checks**: Liveness and readiness endpoints
 - **Detailed Status**: Server status via HTTP API
@@ -131,7 +138,7 @@ python cli.py -H localhost -p 9999 --tls --ca-cert ca.crt -u admin -P secret123
 
 ```json
 {
-  "version": "3.3.0",
+  "version": "3.4.0",
   "server": {
     "host": "0.0.0.0",
     "port": 9999,
@@ -158,7 +165,21 @@ python cli.py -H localhost -p 9999 --tls --ca-cert ca.crt -u admin -P secret123
 }
 ```
 
-### Metrics and Monitoring (New in v3.2.0)
+### Event Scheduler Configuration (New in v3.4.0)
+
+```json
+{
+  "event_scheduler": {
+    "enabled": true,
+    "check_interval": 60,
+    "max_history_entries": 10000,
+    "default_max_retries": 3,
+    "retry_delay_seconds": 300
+  }
+}
+```
+
+### Metrics and Monitoring (v3.2.0+)
 
 ```json
 {
@@ -177,7 +198,7 @@ Access metrics at:
 - `http://localhost:9090/health` - Health checks
 - `http://localhost:9090/status` - Detailed status
 
-### Query Optimizer Configuration (New in v3.2.0)
+### Query Optimizer Configuration (v3.2.0+)
 
 ```json
 {
@@ -190,7 +211,7 @@ Access metrics at:
 }
 ```
 
-### Prepared Statement Configuration (New in v3.3.0)
+### Prepared Statement Configuration (v3.3.0+)
 
 ```json
 {
@@ -276,7 +297,7 @@ DESCRIBE users;
 DROP TABLE users;
 ```
 
-### ALTER TABLE (New in v3.2.0)
+### ALTER TABLE (v3.2.0+)
 
 ```sql
 -- Add column
@@ -338,7 +359,49 @@ UPDATE users SET age = 31 WHERE id = 1;
 DELETE FROM users WHERE id = 1;
 ```
 
-### Subqueries (New in v3.2.0)
+### Event Scheduler (New in v3.4.0)
+
+```sql
+-- Create recurring event (runs every day at 2 AM)
+CREATE EVENT daily_cleanup
+ON SCHEDULE EVERY 1 DAY
+STARTS '2024-01-01 02:00:00'
+DO DELETE FROM logs WHERE created_at < DATE_SUB(NOW(), INTERVAL 30 DAY);
+
+-- Create event with interval
+CREATE EVENT hourly_stats
+ON SCHEDULE EVERY 1 HOUR
+DO INSERT INTO stats_summary SELECT COUNT(*) FROM events;
+
+-- Create one-time event
+CREATE EVENT one_time_backup
+ON SCHEDULE AT '2024-12-25 02:00:00'
+DO CALL backup_database();
+
+-- Create event with error handling
+CREATE EVENT retryable_task
+ON SCHEDULE EVERY 30 MINUTE
+ON COMPLETION PRESERVE
+DO CALL process_queue();
+
+-- Enable/Disable events
+ALTER EVENT daily_cleanup DISABLE;
+ALTER EVENT daily_cleanup ENABLE;
+
+-- Drop event
+DROP EVENT daily_cleanup;
+
+-- Show events
+SHOW EVENTS;
+
+-- Show event history
+SHOW EVENT HISTORY daily_cleanup;
+
+-- Show event statistics
+SHOW EVENT STATUS;
+```
+
+### Subqueries (v3.2.0+)
 
 ```sql
 -- Scalar subquery
@@ -358,7 +421,7 @@ SELECT name, (SELECT MAX(total) FROM orders WHERE orders.user_id = users.id) as 
 FROM users;
 ```
 
-### Window Functions (New in v3.3.0)
+### Window Functions (v3.3.0+)
 
 ```sql
 -- Row number within partition
@@ -395,7 +458,7 @@ SELECT
 FROM employees;
 ```
 
-### Common Table Expressions (CTEs) (New in v3.3.0)
+### Common Table Expressions (CTEs) (v3.3.0+)
 
 ```sql
 -- Simple CTE
@@ -435,7 +498,7 @@ WITH RECURSIVE employee_hierarchy AS (
 SELECT * FROM employee_hierarchy ORDER BY level, name;
 ```
 
-### Prepared Statements (New in v3.3.0)
+### Prepared Statements (v3.3.0+)
 
 ```sql
 -- Prepare statement with positional parameters
@@ -458,7 +521,7 @@ DEALLOCATE get_user;
 DEALLOCATE ALL;
 ```
 
-### Views (New in v3.2.0)
+### Views (v3.2.0+)
 
 ```sql
 -- Create view
@@ -475,7 +538,7 @@ DROP VIEW active_users;
 SHOW VIEWS;
 ```
 
-### Full-Text Search (New in v3.2.0)
+### Full-Text Search (v3.2.0+)
 
 ```sql
 -- Create full-text index
@@ -549,7 +612,7 @@ BACKUP DATABASE mydb TO /backups/mydb.backup WITH ENCRYPTION 'mypassword' COMPRE
 RESTORE DATABASE mydb FROM /backups/mydb.backup WITH ENCRYPTION 'mypassword';
 ```
 
-### Query Optimization (New in v3.2.0)
+### Query Optimization (v3.2.0+)
 
 ```sql
 -- Explain query plan
@@ -652,7 +715,7 @@ GPU-accelerated operations:
 - Large dataset sorting
 - Aggregate functions
 
-### Query Plan Caching (New in v3.2.0)
+### Query Plan Caching (v3.2.0+)
 
 ```json
 {
@@ -728,6 +791,25 @@ Access metrics:
 - Verify passphrase is correct
 - Check key file permissions (should be 600)
 - Ensure cryptography library is installed
+
+### Event Scheduler Issues
+
+- Check event scheduler is enabled: `SHOW EVENT STATUS`
+- Review event history: `SHOW EVENT HISTORY event_name`
+- Check event execution logs
+- Verify event schedule expressions
+
+## Migration from v3.3 to v3.4
+
+New in v3.4.0:
+- **Event Scheduler**: Automated task scheduling
+  - Add `event_scheduler` section to config.json
+  - New SQL commands: CREATE EVENT, ALTER EVENT, DROP EVENT
+  - New SHOW commands: SHOW EVENTS, SHOW EVENT HISTORY, SHOW EVENT STATUS
+
+All v3.4.0 features are backward compatible with v3.3.0 databases.
+
+See [MIGRATION_v3.3_to_v3.4.md](MIGRATION_v3.3_to_v3.4.md) for detailed migration guide.
 
 ## Migration from v3.2 to v3.3
 
