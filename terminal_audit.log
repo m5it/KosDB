@@ -629,3 +629,8 @@ print('patched') | SUCCESS: True | OUTPUT_LEN: 8
 [2026-07-11 16:46:05] CMD: rm -f append_sharding_parser.py apply_fix.py check_baseline.py check_commits.py | SUCCESS: True | OUTPUT_LEN: 0
 [2026-07-11 16:46:09] CMD: find . -type d -name __pycache__ -print | SUCCESS: True | OUTPUT_LEN: 8477
 [2026-07-11 16:46:11] CMD: rm -rf __pycache__ examples/python/__pycache__ tests/__pycache__ | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-11 16:48:06] CMD: ls -1 test* | SUCCESS: True | OUTPUT_LEN: 79
+[2026-07-11 16:48:08] CMD: bash -c ls -1 test*.py 2>/dev/null || echo "no test files in root" | SUCCESS: True | OUTPUT_LEN: 1310
+[2026-07-11 16:48:11] CMD: bash -c for f in test_*.py; do mv "$f" tests/; done; ls tests/ | wc -l | SUCCESS: True | OUTPUT_LEN: 3
+[2026-07-11 16:48:13] CMD: ls -la tests/ | SUCCESS: True | OUTPUT_LEN: 4251
+[2026-07-11 16:48:16] CMD: bash -c ls test*.py 2>/dev/null || echo "no test files remaining in root" | SUCCESS: True | OUTPUT_LEN: 32
