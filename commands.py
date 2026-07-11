@@ -42,49 +42,17 @@ class CommandRegistry:
         'DELETE': ['DELETE'],
         'BACKUP': ['ADMIN'],
         'RESTORE': ['ADMIN'],
-        'CREATE_USER': ['ADMIN'],
-        'DROP_USER': ['ADMIN'],
-        'GRANT': ['ADMIN'],
-        'REVOKE': ['ADMIN'],
-        'CREATE_ROLE': ['ADMIN'],
-        'DROP_ROLE': ['ADMIN'],
-        'GRANT_ROLE': ['ADMIN'],
-        'REVOKE_ROLE': ['ADMIN'],
-        'SHOW_GRANTS': ['ADMIN'],
-        'SHOW_ROLES': ['ADMIN'],
-        'CREATE_FULLTEXT_INDEX': ['ADMIN', 'INDEX'],
-        'DROP_FULLTEXT_INDEX': ['ADMIN', 'INDEX'],
-        'MATCH_AGAINST': ['SELECT'],
-        'CREATE_VIEW': ['CREATE'],
-        'DROP_VIEW': ['DROP'],
-        'SHOW_VIEWS': ['SELECT'],
-        'EXPLAIN': ['SELECT'],
-        'ALTER_ADD_COLUMN': ['ALTER'],
-        'ALTER_DROP_COLUMN': ['ALTER'],
-        'ALTER_MODIFY_COLUMN': ['ALTER'],
-        'ALTER_RENAME_COLUMN': ['ALTER'],
-        'ALTER_ADD_INDEX': ['ALTER', 'INDEX'],
-        'ALTER_DROP_INDEX': ['ALTER', 'INDEX'],
-        'ALTER_ADD_FK': ['ALTER', 'REFERENCES'],
-        'ALTER_ADD_UNIQUE': ['ALTER'],
-        'ALTER_ADD_CHECK': ['ALTER'],
-        'ALTER_DROP_CONSTRAINT': ['ALTER'],
-    }
-    
-    def __init__(self, db, authenticator=None, replication_client=None):
-        self.db = db
-        self.authenticator = authenticator
-        self.replication_client = replication_client
+        # Import prepared statement cache
+        try:
+            from prepared_statement_cache import PreparedStatementCache
+            PREPARED_AVAILABLE = True
+        except ImportError:
+            PREPARED_AVAILABLE = False
         
-        # Initialize full-text manager
-        self.ft_manager = None
-        if FULLTEXT_AVAILABLE:
-            self.ft_manager = FulltextIndexManager(db)
-        
-        # Initialize view manager
-        self.view_manager = None
-        if VIEWS_AVAILABLE:
-            self.view_manager = ViewManager(db)
+        # Initialize prepared statement cache
+        self.prepared_cache = None
+        if PREPARED_AVAILABLE:
+            self.prepared_cache = PreparedStatementCache(max_size=100)
         
         # Command handlers
         self.handlers = {
@@ -98,6 +66,43 @@ class CommandRegistry:
             'UPDATE': self._update,
             'DELETE': self._delete,
             'SHOW': self._show,
+            'DESCRIBE': self._describe,
+            'BACKUP': self._backup,
+            'RESTORE': self._restore,
+            'CREATE_USER': self._create_user,
+            'DROP_USER': self._drop_user,
+            'GRANT': self._grant,
+            'REVOKE': self._revoke,
+            'CREATE_ROLE': self._create_role,
+            'DROP_ROLE': self._drop_role,
+            'GRANT_ROLE': self._grant_role,
+            'REVOKE_ROLE': self._revoke_role,
+            'SHOW_GRANTS': self._show_grants,
+            'SHOW_ROLES': self._show_roles,
+            'CREATE_FULLTEXT_INDEX': self._create_fulltext_index,
+            'DROP_FULLTEXT_INDEX': self._drop_fulltext_index,
+            'MATCH_AGAINST': self._match_against,
+            'CREATE_VIEW': self._create_view,
+            'DROP_VIEW': self._drop_view,
+            'SHOW_VIEWS': self._show_views,
+            'EXPLAIN': self._explain,
+            # Prepared statements (v3.3.0)
+            'PREPARE': self._prepare,
+            'EXECUTE': self._execute,
+            'DEALLOCATE': self._deallocate,
+            'DEALLOCATE_ALL': self._deallocate_all,
+            # ALTER TABLE operations
+            'ALTER_ADD_COLUMN': self._alter_add_column,
+            'ALTER_DROP_COLUMN': self._alter_drop_column,
+            'ALTER_MODIFY_COLUMN': self._alter_modify_column,
+            'ALTER_RENAME_COLUMN': self._alter_rename_column,
+            'ALTER_ADD_INDEX': self._alter_add_index,
+            'ALTER_DROP_INDEX': self._alter_drop_index,
+            'ALTER_ADD_FK': self._alter_add_constraint,
+            'ALTER_ADD_UNIQUE': self._alter_add_constraint,
+            'ALTER_ADD_CHECK': self._alter_add_constraint,
+            'ALTER_DROP_CONSTRAINT': self._alter_drop_constraint,
+        }
             'DESCRIBE': self._describe,
             'BACKUP': self._backup,
             'RESTORE': self._restore,
@@ -572,7 +577,80 @@ class CommandRegistry:
         
         if not table or not column:
             return "ERROR: Table and column name required"
+        return self.db.alter_drop_constraint(table, constraint_name)
+    
+    # Prepared Statement Handlers (v3.3.0)
+    def _prepare(self, params, state):
+        """Prepare a statement for later execution."""
+        if not self.prepared_cache:
+            return "ERROR: Prepared statement support not available"
         
+        name = params.get('name')
+        sql = params.get('sql')
+        
+        if not name or not sql:
+            return "ERROR: PREPARE requires statement name and SQL"
+        
+        try:
+            self.prepared_cache.prepare(name, sql)
+            return f"Statement '{name}' prepared successfully"
+        except ValueError as e:
+            return f"ERROR: {e}"
+        except Exception as e:
+            return f"ERROR: Failed to prepare statement: {e}"
+    
+    def _execute(self, params, state):
+        """Execute a prepared statement with parameters."""
+        if not self.prepared_cache:
+            return "ERROR: Prepared statement support not available"
+        
+        name = params.get('name')
+        parameters = params.get('parameters')
+        
+        if not name:
+            return "ERROR: EXECUTE requires statement name"
+        
+        try:
+            # Get bound SQL
+            sql = self.prepared_cache.execute(name, parameters)
+            
+            # Now execute the SQL
+            # This requires parsing and executing the resulting SQL
+            from parser import CommandParser
+            parser = CommandParser()
+            cmd_type, exec_params = parser.parse(sql)
+            
+            # Execute the parsed command
+            return self.execute(cmd_type, exec_params, state)
+            
+        except ValueError as e:
+            return f"ERROR: {e}"
+        except Exception as e:
+            return f"ERROR: Failed to execute statement: {e}"
+    
+    def _deallocate(self, params, state):
+        """Deallocate a prepared statement."""
+        if not self.prepared_cache:
+            return "ERROR: Prepared statement support not available"
+        
+        name = params.get('name')
+        
+        if not name:
+            return "ERROR: DEALLOCATE requires statement name"
+        
+        success = self.prepared_cache.deallocate(name)
+        if success:
+            return f"Statement '{name}' deallocated"
+        else:
+            return f"ERROR: Statement '{name}' not found"
+    
+    def _deallocate_all(self, params, state):
+        """Deallocate all prepared statements."""
+        if not self.prepared_cache:
+            return "ERROR: Prepared statement support not available"
+        
+        self.prepared_cache.deallocate_all()
+        return "All prepared statements deallocated"
         return self.db.alter_drop_column(table, column, cascade)
     
     def _alter_modify_column(self, params, state):

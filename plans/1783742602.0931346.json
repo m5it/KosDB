@@ -3,7 +3,7 @@
   "title": "KosDB v3.2.0 - Data Integrity & Advanced Query Features",
   "instructions": "Enhance KosDB with critical data integrity features (foreign keys, unique constraints), modern data types (JSON), advanced search capabilities (full-text), and operational improvements (metrics, query plan caching). Focus on features that improve data reliability and developer experience while maintaining backward compatibility with v3.1.0.",
   "startTimestamp": 1783742602.093138,
-  "endTimestamp": 1783744444.2741401,
+  "endTimestamp": 1783758454.7877889,
   "tasks": {
     "1783742606.1479802": {
       "id": "1783742606.1479802",
@@ -13,11 +13,11 @@
       "endTimestamp": 1783742854.9062307,
       "log": [
         {
-          "timestamp": 1783743165.2603743,
+          "timestamp": 1783758445.5915837,
           "text": "Build started"
         },
         {
-          "timestamp": 1783743165.260377,
+          "timestamp": 1783758445.5915847,
           "text": "Successfully implemented Foreign Key Constraints for KosDB v3.2.0: 1) Updated parser.py with comprehensive FK parsing including inline REFERENCES syntax (col TYPE REFERENCES table(col)) and table-level FOREIGN KEY syntax (FOREIGN KEY (col) REFERENCES table(col)), 2) Added support for ON DELETE/ON UPDATE actions (CASCADE, SET_NULL, RESTRICT, NO_ACTION), 3) Updated database.py with FK metadata storage in table schema, FK validation on INSERT and UPDATE operations, and proper error messages, 4) Implemented ON DELETE CASCADE (deletes referencing rows) and ON DELETE SET_NULL (sets FK to NULL), 5) Created comprehensive test suite test_fk_constraints.py with 15+ test cases covering syntax parsing, constraint validation, cascading deletes, self-referencing FKs, and edge cases. All components are backward compatible with existing v3.1.0 functionality."
         }
       ]
@@ -30,7 +30,7 @@
       "endTimestamp": 1783742917.2423697,
       "log": [
         {
-          "timestamp": 1783743165.2603827,
+          "timestamp": 1783758445.5915878,
           "text": "Successfully implemented Unique Constraints for KosDB v3.2.0: 1) Parser already supports UNIQUE syntax from FK task (both inline \"col TYPE UNIQUE\" and table-level \"UNIQUE (col1, col2)\"), 2) Updated database.py with _validate_unique_constraints() method to check for duplicates before INSERT/UPDATE, 3) Added _update_unique_indexes() method to maintain unique indexes, 4) Modified insert() to validate unique constraints and return proper error messages, 5) Modified update() to validate unique constraints (excluding current row) and update indexes, 6) Supports composite unique constraints (multiple columns), 7) NULL values are allowed in unique constraints (SQL standard), 8) Created comprehensive test suite test_unique_constraints.py with 15+ test cases covering inline/table-level syntax, composite constraints, NULL handling, error messages, and edge cases. All changes backward compatible with v3.1.0."
         }
       ]
@@ -43,7 +43,7 @@
       "endTimestamp": 1783743363.1881876,
       "log": [
         {
-          "timestamp": 1783743165.260386,
+          "timestamp": 1783758445.5915897,
           "text": "Successfully implemented JSON Data Type for KosDB v3.2.0: 1) Created json_functions.py module with comprehensive JSON utilities including validate_json(), parse_json(), json_extract(), json_extract_text(), json_contains(), json_keys(), json_array_length(), and helper functions, 2) Updated parser.py to support JSON column type in CREATE TABLE and JSON extraction operators (-> and ->>) in SELECT queries, 3) Updated database.py with column_types storage in schema, _validate_json_column() method for INSERT/UPDATE validation, modified select() to handle JSON extraction with proper aliasing, 4) JSON validation occurs on INSERT and UPDATE operations with proper error messages, 5) Supports nested JSON paths ($.store.book[0].title), text extraction (->>), JSON functions, and proper NULL handling, 6) Created comprehensive test suite test_json_type.py with 20+ test cases covering type creation, validation, extraction operators, edge cases, and JSON functions. All changes backward compatible with v3.1.0."
         }
       ]
@@ -56,7 +56,7 @@
       "endTimestamp": 1783743368.7051954,
       "log": [
         {
-          "timestamp": 1783743359.9755821,
+          "timestamp": 1783758445.5915904,
           "text": "Successfully implemented Full-Text Search for KosDB v3.2.0: 1) Created fulltext_index.py module with FulltextIndex class featuring tokenization, stemming (suffix removal rules), inverted index storage, and TF-IDF scoring, 2) Implemented FulltextIndexManager for index lifecycle (create, drop, update) and search coordination, 3) Added three search modes: NATURAL LANGUAGE (TF-IDF ranking), BOOLEAN (+include/-exclude operators), and QUERY EXPANSION (pseudo-relevance feedback), 4) Updated parser.py with CREATE FULLTEXT INDEX and DROP FULLTEXT INDEX syntax, plus MATCH ... AGAINST syntax with mode specification, 5) Updated commands.py with _create_fulltext_index(), _drop_fulltext_index(), and _match_against() command handlers, 6) Features include stop word filtering, simple stemming, relevance scoring, result highlighting, and multi-column search support, 7) Created comprehensive test suite test_fulltext_search.py with 20+ test cases covering tokenization, stemming, all search modes, index management, and edge cases. All changes backward compatible with v3.1.0."
         }
       ]
@@ -69,7 +69,7 @@
       "endTimestamp": 1783743482.0401223,
       "log": [
         {
-          "timestamp": 1783743477.050071,
+          "timestamp": 1783758445.5915916,
           "text": "Successfully implemented Database Views for KosDB v3.2.0: 1) Created view_manager.py module with ViewManager class featuring view creation, storage in _system database, and query expansion, 2) Implemented circular reference detection to prevent self-referencing views and dependency cycles, 3) Added dependency tracking to prevent dropping views that other views depend on, 4) Updated parser.py with CREATE VIEW, DROP VIEW, and SHOW VIEWS syntax patterns, 5) Updated commands.py with view command handlers: _create_view(), _drop_view(), _show_views(), and integrated DESCRIBE for views, 6) View definitions stored with metadata including query, creation time, and dependencies, 7) Views support inline expansion for query execution, 8) Created comprehensive test suite test_views.py with 15+ test cases covering creation, dropping, circular references, dependencies, and edge cases. All changes backward compatible with v3.1.0."
         }
       ]
@@ -82,7 +82,7 @@
       "endTimestamp": 1783743560.149326,
       "log": [
         {
-          "timestamp": 1783743556.718335,
+          "timestamp": 1783758445.591592,
           "text": "Successfully implemented Query Plan Caching for KosDB v3.2.0: 1) Created PlanCache class with LRU eviction policy, configurable max size, and dependency tracking, 2) Implemented cache storage keyed by normalized query hash with table dependencies for invalidation, 3) Added cache statistics tracking: hits, misses, evictions, invalidations, hit rate, miss rate, 4) Implemented invalidation by table (removes plans depending on changed table) or all plans, 5) Updated QueryOptimizer to integrate PlanCache with automatic dependency tracking, 6) Added EXPLAIN CACHE command support in parser and commands.py, 7) Created comprehensive test suite test_query_plan_cache.py with 20+ test cases covering LRU eviction, invalidation, statistics, edge cases, and integration. All changes backward compatible with v3.1.0."
         }
       ]
@@ -95,7 +95,7 @@
       "endTimestamp": 1783743695.8488028,
       "log": [
         {
-          "timestamp": 1783743691.983554,
+          "timestamp": 1783758445.5915928,
           "text": "Successfully implemented Prometheus-compatible Metrics and Health Monitoring for KosDB v3.2.0: 1) Created metrics.py module with Counter (monotonically increasing), Gauge (arbitrary values), and Histogram (distribution with buckets) metric types, all supporting labeled metrics, 2) Implemented MetricsRegistry for centralized metric management with thread-safe operations, 3) Created KosDBMetrics class with pre-defined metrics: query counts/latency, cache hits/misses/size, connection active/total, replication lag, storage size, table rows, and errors, 4) Created metrics_server.py with HTTP server providing /metrics (Prometheus format), /health (liveness/readiness), /health/live, /health/ready, and /status (detailed server status) endpoints, 5) Updated config.json with new 'metrics' section including host, port, collection_interval, retention_days, and configurable collectors, 6) Version bumped to 3.2.0 in config.json, 7) Created comprehensive test suite test_metrics.py with 15+ test cases covering all metric types, registry operations, KosDB-specific metrics, and edge cases. All changes backward compatible with v3.1.0."
         }
       ]

@@ -1,8 +1,9 @@
 """
-Query Optimizer with Execution Planning and Plan Caching for KosDB v3.2.0
+Query Optimizer with Execution Planning and Plan Caching for KosDB v3.3.0
 
 Provides query analysis, cost estimation, execution plan generation,
 optimization strategies, and plan caching with LRU eviction.
+Includes support for window functions.
 """
 
 import re
@@ -22,12 +23,15 @@ class OperatorType(Enum):
     SELECT = auto()         # Filter/selection
     PROJECT = auto()        # Column projection
     JOIN = auto()           # Join operation
-class OperatorType(Enum):
-    """Types of query operators."""
-    SCAN = auto()           # Full table scan
-    INDEX_SCAN = auto()     # Index scan
-    SELECT = auto()         # Filter/selection
-    PROJECT = auto()        # Column projection
+    SEMI_JOIN = auto()      # Semi-join (for IN/EXISTS subqueries)
+    ANTI_JOIN = auto()      # Anti-join (for NOT IN/NOT EXISTS)
+    AGGREGATE = auto()      # Aggregation (COUNT, SUM, etc.)
+    SORT = auto()           # Order by
+    LIMIT = auto()          # Limit results
+    INSERT = auto()         # Insert operation
+    UPDATE = auto()         # Update operation
+    DELETE = auto()         # Delete operation
+    WINDOW = auto()         # Window function operation (v3.3.0)
     JOIN = auto()           # Join operation
     SEMI_JOIN = auto()      # Semi-join (for IN/EXISTS subqueries)
     ANTI_JOIN = auto()      # Anti-join (for NOT IN/NOT EXISTS)
@@ -243,8 +247,6 @@ class ExecutionPlan:
         self._explain_operator(self.root, 0, lines)
         lines.append(f"\nTotal Cost: {self.total_cost:.4f}")
         lines.append(f"Estimated Rows: {self.estimated_rows}")
-        return "\n".join(lines)
-    
     def _explain_operator(self, op: Operator, depth: int, lines: List[str]):
         """Recursively explain operators."""
         indent = "  " * depth
@@ -268,12 +270,12 @@ class ExecutionPlan:
             lines.append(f"{indent}→ Limit{cost_info}")
         elif op.op_type == OperatorType.AGGREGATE:
             lines.append(f"{indent}→ Aggregate{cost_info}")
+        elif op.op_type == OperatorType.WINDOW:
+            wf = op.condition.get('function', 'WINDOW_FUNC') if op.condition else 'WINDOW_FUNC'
+            lines.append(f"{indent}→ Window Function: {wf}{cost_info}")
         
         for child in op.children:
             self._explain_operator(child, depth + 1, lines)
-
-
-class CostModel:
     """
     Cost model for query operations.
     Assigns costs based on I/O and CPU estimates.
@@ -693,57 +695,201 @@ n    Main query optimizer class with plan caching.
     def _extract_tables(self, parsed: Dict[str, Any]) -> Set[str]:
     def _optimize_select(self, parsed: Dict[str, Any]) -> 'ExecutionPlan':
         """Generate execution plan for SELECT with subquery support."""
-        # Check for subqueries in WHERE clause
-        where_conditions = parsed.get('where_conditions', [])
+    def _optimize_select(self, parsed: Dict[str, Any]) -> ExecutionPlan:
+        """Generate execution plan for SELECT with window function support."""
+    def _optimize_select(self, parsed: Dict[str, Any]) -> ExecutionPlan:
+        """Generate execution plan for SELECT with window function and CTE support."""
+        # Check for CTE
+        if parsed.get('has_cte'):
+            return self._optimize_select_with_cte(parsed)
         
-        for condition in where_conditions:
-            if condition['type'] in ('IN_SUBQUERY', 'EXISTS', 'SCALAR_SUBQUERY'):
-                # Mark as having subquery
-                parsed['has_subquery'] = True
-                break
+        table = parsed['table']
+        where = parsed.get('where')
+        order_by = parsed.get('order_by')
+        limit = parsed.get('limit')
+        columns = parsed.get('columns', ['*'])
         
-        # Build plan
-        root = self._build_select_plan(parsed)
+        # Check for window functions in columns
+        window_functions = []
+        regular_columns = []
+        
+        for col in columns:
+            if isinstance(col, dict) and col.get('type') == 'WINDOW_FUNCTION':
+                window_functions.append(col)
+            else:
+                regular_columns.append(col)
+        
+        # Build plan bottom-up
+        
+        # 1. Scan operation
+        scan_op = self._create_scan_operator(table, where)
+        
+        # 2. Filter if WHERE clause
+        current = scan_op
+        if where:
+            filter_op = Operator(
+                op_type=OperatorType.SELECT,
+                table=table,
+                condition=where,
+                children=[current]
+            )
+            filter_op.estimated_cost, filter_op.estimated_rows = \
+                self.cost_model.estimate_filter_cost(
+                    current.estimated_rows, where
+                )
+            current = filter_op
+        
+        # 3. Window function operations (v3.3.0)
+        for wf in window_functions:
+            window_op = Operator(
+                op_type=OperatorType.WINDOW,
+                table=table,
+                condition=wf,
+                children=[current]
+            )
+            window_op.estimated_cost, window_op.estimated_rows = \
+                self.cost_model.estimate_sort_cost(current.estimated_rows)
+            window_op.estimated_cost += current.estimated_rows * 0.01
+            current = window_op
+        
+        # 4. Projection
+        project_op = Operator(
+            op_type=OperatorType.PROJECT,
+            table=table,
+            columns=columns,
+            children=[current]
+        )
+        project_op.estimated_rows = current.estimated_rows
+        project_op.estimated_cost = current.estimated_cost + \
+            current.estimated_rows * self.cost_model.CPU_TUPLE_COST * 0.5
+        current = project_op
+        
+        # 5. Sort if ORDER BY
+        if order_by:
+            sort_op = Operator(
+                op_type=OperatorType.SORT,
+                table=table,
+                children=[current]
+            )
+            sort_op.estimated_cost, sort_op.estimated_rows = \
+                self.cost_model.estimate_sort_cost(current.estimated_rows)
+            current = sort_op
+        
+        # 6. Limit if specified
+        if limit is not None:
+            limit_op = Operator(
+                op_type=OperatorType.LIMIT,
+                table=table,
+                children=[current]
+            )
+            limit_op.estimated_rows = min(limit, current.estimated_rows)
+            limit_op.estimated_cost = current.estimated_cost + \
+                self.cost_model.CPU_OPERATOR_COST
+            current = limit_op
+        
+        total_cost = self._calculate_total_cost(current)
         
         return ExecutionPlan(
-            root=root,
-            total_cost=self.cost_model.estimate_plan_cost(root),
-            estimated_rows=self.cost_model.estimate_rows(root)
+            root=current,
+            total_cost=total_cost,
+            estimated_rows=current.estimated_rows,
+            statistics={
+                'table': table,
+                'has_where': where is not None,
+                'has_order_by': order_by is not None,
+                'has_limit': limit is not None,
+                'has_window_functions': len(window_functions) > 0,
+                'window_function_count': len(window_functions),
+                'has_cte': False
+            }
         )
     
-    def _build_select_plan(self, parsed: Dict[str, Any]) -> 'Operator':
-        """Build SELECT execution plan with subquery support."""
-        table = parsed.get('table')
-        columns = parsed.get('columns', ['*'])
-        where_conditions = parsed.get('where_conditions', [])
+    def _optimize_select_with_cte(self, parsed: Dict[str, Any]) -> ExecutionPlan:
+        """Generate execution plan for SELECT with CTEs."""
+        ctes = parsed.get('ctes', [])
+        main_query = parsed.get('main_query', {})
         
-        # Start with table scan
-        root = Operator(
-            op_type=OperatorType.SCAN,
+        # Create CTE operators
+        cte_ops = []
+        for cte in ctes:
+            cte_op = Operator(
+                op_type=OperatorType.SCAN,  # Will be replaced with actual CTE execution
+                table=cte['name'],
+                condition={'cte_def': cte},
+                estimated_rows=100,  # Estimate
+                estimated_cost=50
+            )
+            cte_ops.append(cte_op)
+        
+        # Build main query plan
+        main_plan = self._build_select_plan(main_query)
+        
+        # Add CTE operators as children
+        for cte_op in cte_ops:
+            main_plan.children.insert(0, cte_op)
+        
+        total_cost = self._calculate_total_cost(main_plan)
+        
+        return ExecutionPlan(
+            root=main_plan,
+            total_cost=total_cost + len(ctes) * 50,  # Add CTE overhead
+            estimated_rows=main_plan.estimated_rows,
+            statistics={
+                'has_cte': True,
+                'cte_count': len(ctes),
+                'has_recursive_cte': any(cte.get('is_recursive') for cte in ctes)
+            }
+        )
+        project_op = Operator(
+            op_type=OperatorType.PROJECT,
             table=table,
-            estimated_rows=1000
+            columns=columns,
+            children=[current]
         )
+        project_op.estimated_rows = current.estimated_rows
+        project_op.estimated_cost = current.estimated_cost + \
+            current.estimated_rows * self.cost_model.CPU_TUPLE_COST * 0.5
+        current = project_op
         
-        # Apply WHERE conditions
-        for condition in where_conditions:
-            if condition['type'] == 'SIMPLE':
-                root = Operator(
-n                    op_type=OperatorType.SELECT,\n                    table=table,\n                    condition=condition,\n                    child=root,\n                    estimated_rows=root.estimated_rows * 0.1\n                )
-n            elif condition['type'] == 'IN_SUBQUERY':\n                # Semi-join for IN subquery\n                subquery_plan = self._build_subquery_plan(condition['subquery'])\n                root = Operator(\n                    op_type=OperatorType.SEMI_JOIN,\n                    table=table,\n                    condition=condition,\n                    subquery_plan=subquery_plan,\n                    child=root,\n                    estimated_rows=root.estimated_rows * 0.5\n                )\n            elif condition['type'] == 'EXISTS':\n                # Semi-join for EXISTS\n                subquery_plan = self._build_subquery_plan(condition['subquery'])\n                root = Operator(\n                    op_type=OperatorType.SEMI_JOIN,\n                    table=table,\n                    condition=condition,\n                    subquery_plan=subquery_plan,\n                    child=root,\n                    estimated_rows=root.estimated_rows * 0.3\n                )\n            elif condition['type'] == 'SCALAR_SUBQUERY':\n                # Handle scalar subquery\n                subquery_plan = self._build_subquery_plan(condition['subquery'])\n                root = Operator(\n                    op_type=OperatorType.SELECT,\n                    table=table,\n                    condition=condition,\n                    subquery_plan=subquery_plan,\n                    child=root,\n                    estimated_rows=root.estimated_rows * 0.1\n                )\n        \n        # Apply projection\n        if columns != ['*']:\n            root = Operator(\n                op_type=OperatorType.PROJECT,\n                table=table,\n                columns=columns,\n                child=root,\n                estimated_rows=root.estimated_rows\n            )\n        \n        return root\n    \n    def _build_subquery_plan(self, subquery: Dict[str, Any]) -> 'ExecutionPlan':\n        \"\"\"Build execution plan for a subquery.\"\"\"\n        sub_params = subquery.get('params', {})\n        \n        # Recursively optimize subquery\n        if sub_params.get('type') == 'SELECT':\n            return self._optimize_select(sub_params)\n        \n        # Default: simple scan\n        return ExecutionPlan(\n            root=Operator(\n                op_type=OperatorType.SCAN,\n                table=sub_params.get('table', 'unknown'),\n                estimated_rows=100\n            ),\n            total_cost=100,\n            estimated_rows=100\n        )
-        elif parsed['type'] == 'UPDATE':
-            plan = self._optimize_update(parsed)
-        elif parsed['type'] == 'DELETE':
-            plan = self._optimize_delete(parsed)
-        else:
-            raise ValueError(f"Unsupported query type: {parsed['type']}")
+        # 5. Sort if ORDER BY
+        if order_by:
+            sort_op = Operator(
+                op_type=OperatorType.SORT,
+                table=table,
+                children=[current]
+            )
+            sort_op.estimated_cost, sort_op.estimated_rows = \
+                self.cost_model.estimate_sort_cost(current.estimated_rows)
+            current = sort_op
         
-        # Cache plan
-        if use_cache:
-            self.plan_cache[cache_key] = plan
+        # 6. Limit if specified
+        if limit is not None:
+            limit_op = Operator(
+                op_type=OperatorType.LIMIT,
+                table=table,
+                children=[current]
+            )
+            limit_op.estimated_rows = min(limit, current.estimated_rows)
+            limit_op.estimated_cost = current.estimated_cost + \
+                self.cost_model.CPU_OPERATOR_COST
+            current = limit_op
         
-        return plan
-    
-    def _get_cache_key(self, query: str) -> str:
+        # Calculate total cost
+        total_cost = self._calculate_total_cost(current)
+        
+        return ExecutionPlan(
+            root=current,
+            total_cost=total_cost,
+            estimated_rows=current.estimated_rows,
+            statistics={
+                'table': table,
+                'has_where': where is not None,
+                'has_order_by': order_by is not None,
+                'has_limit': limit is not None,
+                'has_window_functions': len(window_functions) > 0,
+                'window_function_count': len(window_functions)
+            }
+        )
         """Generate cache key for query."""
         # Normalize query for caching
         normalized = ' '.join(query.split()).lower()
