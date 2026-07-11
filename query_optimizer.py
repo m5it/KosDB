@@ -1,17 +1,18 @@
 """
-Query Optimizer with Execution Planning for KosDB
+Query Optimizer with Execution Planning and Plan Caching for KosDB v3.2.0
 
 Provides query analysis, cost estimation, execution plan generation,
-and optimization strategies for database operations.
+optimization strategies, and plan caching with LRU eviction.
 """
 
 import re
 import json
 import time
+import hashlib
 from typing import Dict, Any, List, Optional, Tuple, Set, Callable
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 
 
 class OperatorType(Enum):
@@ -21,33 +22,146 @@ class OperatorType(Enum):
     SELECT = auto()         # Filter/selection
     PROJECT = auto()        # Column projection
     JOIN = auto()           # Join operation
+class OperatorType(Enum):
+    """Types of query operators."""
+    SCAN = auto()           # Full table scan
+    INDEX_SCAN = auto()     # Index scan
+    SELECT = auto()         # Filter/selection
+    PROJECT = auto()        # Column projection
+    JOIN = auto()           # Join operation
+    SEMI_JOIN = auto()      # Semi-join (for IN/EXISTS subqueries)
+    ANTI_JOIN = auto()      # Anti-join (for NOT IN/NOT EXISTS)
     AGGREGATE = auto()      # Aggregation (COUNT, SUM, etc.)
     SORT = auto()           # Order by
     LIMIT = auto()          # Limit results
     INSERT = auto()         # Insert operation
     UPDATE = auto()         # Update operation
     DELETE = auto()         # Delete operation
-
-
-class JoinType(Enum):
-    """Types of joins."""
-    NESTED_LOOP = auto()
-    HASH_JOIN = auto()
-    MERGE_JOIN = auto()
-
-
-@dataclass
-class Statistics:
-    """Table/column statistics for cost estimation."""
-    table_name: str
-    row_count: int = 0
-    column_stats: Dict[str, Dict[str, Any]] = field(default_factory=dict)
-    index_stats: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    access_count: int = 0
     
-    def get_column_cardinality(self, column: str) -> int:
-        """Get number of distinct values in column."""
-        stats = self.column_stats.get(column, {})
-        return stats.get('distinct_count', self.row_count)
+    def touch(self):
+        """Update access time and count."""
+        self.last_accessed = time.time()
+        self.access_count += 1
+
+
+class PlanCache:
+    """
+    LRU Cache for execution plans with configurable size and statistics.
+    """
+    
+    def __init__(self, max_size: int = 100):
+        self.max_size = max_size
+        self.cache: OrderedDict[str, PlanCacheEntry] = OrderedDict()
+        self.stats = {
+            'hits': 0,
+            'misses': 0,
+            'evictions': 0,
+            'invalidations': 0
+        }
+        self.dependent_tables: Dict[str, Set[str]] = {}  # cache_key -> tables
+    
+    def get(self, key: str) -> Optional['ExecutionPlan']:
+        """Get plan from cache (updates LRU)."""
+        if key in self.cache:
+            entry = self.cache.pop(key)  # Remove to re-add at end
+            entry.touch()
+            self.cache[key] = entry  # Re-add (most recent)
+            self.stats['hits'] += 1
+            return entry.plan
+        self.stats['misses'] += 1
+        return None
+    
+    def put(self, key: str, plan: 'ExecutionPlan', tables: Set[str]):
+        """Add plan to cache."""
+        # Evict if necessary
+        while len(self.cache) >= self.max_size:
+            self._evict_lru()
+        
+        entry = PlanCacheEntry(
+            plan=plan,
+            created_at=time.time(),
+            last_accessed=time.time(),
+            access_count=1
+        )
+        self.cache[key] = entry
+        self.dependent_tables[key] = tables
+    
+    def _evict_lru(self):
+        """Evict least recently used entry."""
+        if self.cache:
+            oldest_key = next(iter(self.cache))
+            del self.cache[oldest_key]
+            del self.dependent_tables[oldest_key]
+            self.stats['evictions'] += 1
+    
+    def invalidate(self, table_name: Optional[str] = None):
+        """
+        Invalidate cache entries.
+        
+        Args:
+            table_name: If provided, invalidate only entries depending on this table.
+                       If None, invalidate all entries.
+        """
+        if table_name is None:
+            # Clear all
+            count = len(self.cache)
+            self.cache.clear()
+            self.dependent_tables.clear()
+            self.stats['invalidations'] += count
+        else:
+            # Invalidate entries depending on table
+            keys_to_remove = [
+                key for key, tables in self.dependent_tables.items()
+                if table_name in tables
+            ]
+            for key in keys_to_remove:
+                del self.cache[key]
+                del self.dependent_tables[key]
+                self.stats['invalidations'] += 1
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Get cache statistics."""
+        total_requests = self.stats['hits'] + self.stats['misses']
+        hit_rate = self.stats['hits'] / total_requests if total_requests > 0 else 0.0
+        
+        return {
+            'size': len(self.cache),
+            'max_size': self.max_size,
+            'hits': self.stats['hits'],
+            'misses': self.stats['misses'],
+            'evictions': self.stats['evictions'],
+            'invalidations': self.stats['invalidations'],
+            'hit_rate': round(hit_rate, 4),
+            'miss_rate': round(1 - hit_rate, 4)
+        }
+    
+    def explain(self) -> str:
+        """Generate human-readable cache status."""
+        stats = self.get_stats()
+        
+        lines = [
+            "Plan Cache Status:",
+            "=" * 50,
+            f"Size: {stats['size']} / {stats['max_size']} entries",
+            f"Hit Rate: {stats['hit_rate']*100:.2f}%",
+            f"Miss Rate: {stats['miss_rate']*100:.2f}%",
+            f"Total Hits: {stats['hits']}",
+            f"Total Misses: {stats['misses']}",
+            f"Evictions: {stats['evictions']}",
+            f"Invalidations: {stats['invalidations']}",
+            "",
+            "Cached Plans:",
+            "-" * 30
+        ]
+        
+        for key, entry in self.cache.items():
+            age = time.time() - entry.created_at
+            last_used = time.time() - entry.last_accessed
+            lines.append(f"  {key[:16]}... : {entry.access_count} accesses, "
+                        f"age={age:.0f}s, last_used={last_used:.0f}s ago")
+        
+        return "\n".join(lines)
     
     def get_column_selectivity(self, column: str) -> float:
         """Get selectivity (0-1) of column."""
@@ -457,41 +571,23 @@ class QueryParser:
         if upper == 'FALSE':
             return False
         if upper == 'NULL':
-            return None
-        
-        return val
-    
-    def _parse_set_clause(self, set_str: str) -> Dict[str, Any]:
-        """Parse SET clause."""
-        result = {}
-        assignments = set_str.split(',')
-        
-        for assignment in assignments:
-            match = re.match(r'(\w+)\s*=\s*(.+)', assignment.strip())
-            if match:
-                result[match.group(1)] = self._parse_value(match.group(2))
-        
-        return result
-
-
 class QueryOptimizer:
     """
-    Main query optimizer class.
+n    Main query optimizer class with plan caching.
     Generates optimal execution plans for queries.
     """
     
-    def __init__(self):
+    def __init__(self, cache_size: int = 100):
         self.cost_model = CostModel()
         self.parser = QueryParser()
-        self.plan_cache: Dict[str, ExecutionPlan] = {}
-        self.cache_hits = 0
-        self.cache_misses = 0
+        self.plan_cache = PlanCache(max_size=cache_size)
+        self.index_advisor = IndexAdvisor()
     
-    def add_statistics(self, table: str, stats: Statistics):
+    def add_statistics(self, table: str, stats: 'Statistics'):
         """Add table statistics."""
         self.cost_model.add_statistics(table, stats)
     
-    def optimize(self, query: str, use_cache: bool = True) -> ExecutionPlan:
+    def optimize(self, query: str, use_cache: bool = True) -> 'ExecutionPlan':
         """
         Optimize a query and return execution plan.
         
@@ -504,20 +600,136 @@ class QueryOptimizer:
         """
         # Check cache
         cache_key = self._get_cache_key(query)
-        if use_cache and cache_key in self.plan_cache:
-            self.cache_hits += 1
-            return self.plan_cache[cache_key]
-        
-        self.cache_misses += 1
+        if use_cache:
+            cached_plan = self.plan_cache.get(cache_key)
+            if cached_plan:
+                return cached_plan
         
         # Parse query
         parsed = self.parser.parse(query)
+        
+        # Extract tables for cache dependency tracking
+        tables = self._extract_tables(parsed)
         
         # Generate plan based on query type
         if parsed['type'] == 'SELECT':
             plan = self._optimize_select(parsed)
         elif parsed['type'] == 'INSERT':
             plan = self._optimize_insert(parsed)
+        elif parsed['type'] == 'UPDATE':
+            plan = self._optimize_update(parsed)
+        elif parsed['type'] == 'DELETE':
+            plan = self._optimize_delete(parsed)
+        else:
+            raise ValueError(f"Unsupported query type: {parsed['type']}")
+        
+        # Cache plan
+        if use_cache:
+            self.plan_cache.put(cache_key, plan, tables)
+        
+        return plan
+    
+    def _get_cache_key(self, query: str) -> str:
+        """Generate cache key for query."""
+        # Normalize query for caching
+        normalized = ' '.join(query.split()).lower()
+        return hashlib.md5(normalized.encode()).hexdigest()
+    
+    def _extract_tables(self, parsed: Dict[str, Any]) -> Set[str]:
+        """Extract table names from parsed query for cache dependencies."""
+        tables = set()
+        
+        if 'table' in parsed and parsed['table']:
+            tables.add(parsed['table'])
+        
+        # Handle JOINs
+        if 'joins' in parsed:
+            for join in parsed['joins']:
+                if 'table' in join:
+                    tables.add(join['table'])
+        
+        return tables
+    
+    def invalidate_cache(self, table_name: Optional[str] = None):
+        """
+        Invalidate plan cache.
+        
+        Args:
+            table_name: If provided, invalidate only plans using this table.
+                       If None, invalidate all plans.
+        """
+        self.plan_cache.invalidate(table_name)
+    
+    def get_cache_stats(self) -> Dict[str, Any]:
+        """Get plan cache statistics."""
+        return self.plan_cache.get_stats()
+    
+    def explain_cache(self) -> str:
+        """Get human-readable cache status."""
+        return self.plan_cache.explain()
+        if parsed['type'] == 'SELECT':
+            plan = self._optimize_select(parsed)
+        elif parsed['type'] == 'INSERT':
+            plan = self._optimize_insert(parsed)
+        elif parsed['type'] == 'UPDATE':
+            plan = self._optimize_update(parsed)
+        elif parsed['type'] == 'DELETE':
+            plan = self._optimize_delete(parsed)
+        else:
+            raise ValueError(f"Unsupported query type: {parsed['type']}")
+        
+        # Cache plan
+        if use_cache:
+            self.plan_cache.put(cache_key, plan, tables)
+        
+        return plan
+    
+    def _get_cache_key(self, query: str) -> str:
+        """Generate cache key for query."""
+        # Normalize query for caching
+        normalized = ' '.join(query.split()).lower()
+        return hashlib.md5(normalized.encode()).hexdigest()
+    
+    def _extract_tables(self, parsed: Dict[str, Any]) -> Set[str]:
+    def _optimize_select(self, parsed: Dict[str, Any]) -> 'ExecutionPlan':
+        """Generate execution plan for SELECT with subquery support."""
+        # Check for subqueries in WHERE clause
+        where_conditions = parsed.get('where_conditions', [])
+        
+        for condition in where_conditions:
+            if condition['type'] in ('IN_SUBQUERY', 'EXISTS', 'SCALAR_SUBQUERY'):
+                # Mark as having subquery
+                parsed['has_subquery'] = True
+                break
+        
+        # Build plan
+        root = self._build_select_plan(parsed)
+        
+        return ExecutionPlan(
+            root=root,
+            total_cost=self.cost_model.estimate_plan_cost(root),
+            estimated_rows=self.cost_model.estimate_rows(root)
+        )
+    
+    def _build_select_plan(self, parsed: Dict[str, Any]) -> 'Operator':
+        """Build SELECT execution plan with subquery support."""
+        table = parsed.get('table')
+        columns = parsed.get('columns', ['*'])
+        where_conditions = parsed.get('where_conditions', [])
+        
+        # Start with table scan
+        root = Operator(
+            op_type=OperatorType.SCAN,
+            table=table,
+            estimated_rows=1000
+        )
+        
+        # Apply WHERE conditions
+        for condition in where_conditions:
+            if condition['type'] == 'SIMPLE':
+                root = Operator(
+n                    op_type=OperatorType.SELECT,\n                    table=table,\n                    condition=condition,\n                    child=root,\n                    estimated_rows=root.estimated_rows * 0.1\n                )
+n            elif condition['type'] == 'IN_SUBQUERY':\n                # Semi-join for IN subquery\n                subquery_plan = self._build_subquery_plan(condition['subquery'])\n                root = Operator(\n                    op_type=OperatorType.SEMI_JOIN,\n                    table=table,\n                    condition=condition,\n                    subquery_plan=subquery_plan,\n                    child=root,\n                    estimated_rows=root.estimated_rows * 0.5\n                )\n            elif condition['type'] == 'EXISTS':\n                # Semi-join for EXISTS\n                subquery_plan = self._build_subquery_plan(condition['subquery'])\n                root = Operator(\n                    op_type=OperatorType.SEMI_JOIN,\n                    table=table,\n                    condition=condition,\n                    subquery_plan=subquery_plan,\n                    child=root,\n                    estimated_rows=root.estimated_rows * 0.3\n                )\n            elif condition['type'] == 'SCALAR_SUBQUERY':\n                # Handle scalar subquery\n                subquery_plan = self._build_subquery_plan(condition['subquery'])\n                root = Operator(\n                    op_type=OperatorType.SELECT,\n                    table=table,\n                    condition=condition,\n                    subquery_plan=subquery_plan,\n                    child=root,\n                    estimated_rows=root.estimated_rows * 0.1\n                )\n        \n        # Apply projection\n        if columns != ['*']:\n            root = Operator(\n                op_type=OperatorType.PROJECT,\n                table=table,\n                columns=columns,\n                child=root,\n                estimated_rows=root.estimated_rows\n            )\n        \n        return root\n    \n    def _build_subquery_plan(self, subquery: Dict[str, Any]) -> 'ExecutionPlan':\n        \"\"\"Build execution plan for a subquery.\"\"\"\n        sub_params = subquery.get('params', {})\n        \n        # Recursively optimize subquery\n        if sub_params.get('type') == 'SELECT':\n            return self._optimize_select(sub_params)\n        \n        # Default: simple scan\n        return ExecutionPlan(\n            root=Operator(\n                op_type=OperatorType.SCAN,\n                table=sub_params.get('table', 'unknown'),\n                estimated_rows=100\n            ),\n            total_cost=100,\n            estimated_rows=100\n        )
         elif parsed['type'] == 'UPDATE':
             plan = self._optimize_update(parsed)
         elif parsed['type'] == 'DELETE':

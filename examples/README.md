@@ -1,53 +1,140 @@
-# LevelDB Socket Server - Client Examples
+# KosDB Examples
 
-This directory contains official client libraries and usage examples for connecting to the LevelDB Socket Server from PHP and Python applications.
+This directory contains example code and SQL scripts demonstrating KosDB v3.2.0 features.
 
-## Directory Structure
+## New in v3.2.0
 
+### v3.2_features_demo.py
+Comprehensive Python demonstration of all v3.2.0 features:
+- CHECK constraints
+- Foreign keys
+- ALTER TABLE operations
+- Views
+- Subqueries
+- JSON support
+- Query optimization
+- Metrics collection
+
+**Run:**
+```bash
+python examples/v3.2_features_demo.py
 ```
-examples/
-├── README.md              # This file
-├── php/
-│   ├── LevelDBClient.php  # PHP client library
-│   ├── basic_example.php  # Basic CRUD operations
-│   └── replication_example.php  # Replication features
-└── python/
-    ├── leveldb_client.py  # Python client library
-    ├── basic_example.py   # Basic CRUD operations
-    └── replication_example.py   # Replication features
+
+### sql_examples.sql
+Complete SQL reference examples covering:
+- Database creation and setup
+- CHECK constraints
+- Foreign keys with referential integrity
+- ALTER TABLE operations (ADD, DROP, MODIFY, RENAME)
+- Views creation and usage
+- Subqueries (scalar, IN, EXISTS, correlated)
+- JSON data operations
+- Full-text search
+- Transactions
+- Query optimization with EXPLAIN
+- Backup and restore
+- User management and roles
+
+**Usage:**
+```bash
+# Run via CLI
+python cli.py < examples/sql_examples.sql
+
+# Or execute interactively
+python cli.py
+# Then paste commands
 ```
 
-## PHP Examples
+## Legacy Examples
 
-### Prerequisites
+### PHP Examples (`examples/php/`)
 
-- PHP 7.4+ with sockets extension enabled
-- LevelDB server running (see main README)
+| File | Description |
+|------|-------------|
+| `LevelDBClient.php` | PHP client library |
+| `basic_example.php` | CRUD operations demo |
+| `replication_example.php` | Replication features |
 
-### Files
+### Python Examples (`examples/python/`)
 
-- **LevelDBClient.php** - Full-featured client library with:
-  - Connection management
-  - Authentication
-  - CRUD operations
-  - Result parsing
-  - Replication support
+| File | Description |
+|------|-------------|
+| `leveldb_client.py` | Python client library |
+| `basic_example.py` | CRUD operations demo |
+| `replication_example.php` | Replication features |
 
-### Usage
+## Feature Examples by Version
 
-```php
-<?php
-require_once 'LevelDBClient.php';
+### v3.2.0 Features
 
-// Simple usage
-$client = new LevelDBClient('localhost', 9999);
-$client->connect();
-$client->authenticate('admin', 'admin');
+**CHECK Constraints:**
+```sql
+CREATE TABLE products (
+    id INT PRIMARY KEY,
+    price FLOAT CHECK (price > 0),
+    status TEXT CHECK (status IN ('active', 'inactive'))
+);
+```
 
-// Create database and table
-$client->createDatabase('myapp');
-$client->useDatabase('myapp');
-$client->createTable('users', ['id INT PRIMARY KEY', 'name TEXT']);
+**Foreign Keys:**
+```sql
+CREATE TABLE orders (
+    id INT PRIMARY KEY,
+    user_id INT REFERENCES users(id) ON DELETE CASCADE
+);
+```
+
+**ALTER TABLE:**
+```sql
+ALTER TABLE users ADD COLUMN email TEXT;
+ALTER TABLE users RENAME COLUMN name TO full_name;
+ALTER TABLE users ADD INDEX idx_email (email);
+```
+
+**Subqueries:**
+```sql
+SELECT * FROM users WHERE id IN (SELECT user_id FROM orders);
+SELECT * FROM users WHERE EXISTS (SELECT 1 FROM orders WHERE user_id = users.id);
+```
+
+**JSON:**
+```sql
+CREATE TABLE events (id INT, data JSON);
+INSERT INTO events VALUES (1, '{"type": "click"}');
+SELECT data->type FROM events;
+```
+
+**Full-Text Search:**
+```sql
+CREATE FULLTEXT INDEX idx_content ON articles(content);
+SELECT * FROM articles WHERE MATCH(content) AGAINST('database');
+```
+
+**Query Optimization:**
+```sql
+EXPLAIN SELECT * FROM users WHERE age > 25;
+EXPLAIN CACHE;
+```
+
+### v3.1.0 Features
+
+**TLS Connection:**
+```bash
+python cli.py --tls --ca-cert ca.crt -u admin -P password
+```
+
+**Audit Logging:**
+```sql
+-- All operations automatically logged
+CREATE USER alice PASSWORD 'secret';
+-- Logged: CREATE USER operation
+```
+
+**Roles:**
+```sql
+CREATE ROLE readonly DESCRIPTION 'Read-only access';
+GRANT ROLE readonly TO alice;
+```
 
 // Insert data
 $client->insert('users', [1, 'John Doe']);

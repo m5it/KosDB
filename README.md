@@ -1,17 +1,19 @@
-# KosDB v3.1.0
+# KosDB v3.2.0
 
-A high-performance, feature-rich LevelDB-based database server with SQL-like interface, replication, TLS encryption, GPU acceleration, and comprehensive audit logging.
+A high-performance, feature-rich LevelDB-based database server with SQL-like interface, replication, TLS encryption, GPU acceleration, comprehensive audit logging, and advanced query capabilities.
 
 ## Features
 
 ### Core Database
 - **SQL-like Interface**: Familiar CREATE, INSERT, SELECT, UPDATE, DELETE commands
 - **Multiple Databases**: Support for multiple named databases
-- **Table Schema**: Define columns with types (INT, TEXT, FLOAT, etc.)
-- **Transactions**: ACID-compliant operations
-- **Indexing**: Primary and secondary index support
+- **Table Schema**: Define columns with types (INT, TEXT, FLOAT, JSON, etc.)
+- **Transactions**: ACID-compliant operations with BEGIN, COMMIT, ROLLBACK
+- **Indexing**: Primary, secondary, and full-text index support
+- **Views**: Virtual tables based on SELECT queries
+- **Subqueries**: Scalar, IN/NOT IN, EXISTS/NOT EXISTS, correlated subqueries
 
-### Security (New in v3.1.0)
+### Security (New in v3.1.0+)
 - **TLS/SSL Encryption**: Secure client-server communication
   - Certificate-based authentication
   - Self-signed certificate generation
@@ -27,7 +29,7 @@ A high-performance, feature-rich LevelDB-based database server with SQL-like int
 ### Authentication & Authorization
 - **Database-backed Authentication**: Username/password with bcrypt hashing
 - **Role-Based Access Control (RBAC)**: Create roles and assign to users
-- **Granular Permissions**: SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, ADMIN
+- **Granular Permissions**: SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, REFERENCES, ADMIN
 - **Column-level Security**: Restrict access to specific columns
 - **Session Management**: JWT-based sessions with TTL
 
@@ -37,6 +39,21 @@ A high-performance, feature-rich LevelDB-based database server with SQL-like int
 - **Async Replication**: Non-blocking replication
 - **Replication Lag Monitoring**: Track replication health
 
+### Query Optimization (New in v3.2.0)
+- **Query Plan Caching**: LRU cache for parsed execution plans
+- **Cost-Based Optimizer**: Statistics-driven plan selection
+- **Semi-Join Optimization**: Efficient IN/EXISTS subquery execution
+- **Index Advisor**: Automatic index recommendations
+- **Query Statistics**: Execution metrics and profiling
+
+### Advanced SQL (New in v3.2.0)
+- **CHECK Constraints**: Data validation with complex expressions
+- **Foreign Keys**: Referential integrity with CASCADE/SET NULL/RESTRICT
+- **ALTER TABLE**: Add/drop/modify columns, indexes, constraints
+- **JSON Support**: Native JSON columns with path extraction
+- **Full-Text Search**: MATCH ... AGAINST syntax with relevance scoring
+- **Subqueries**: Scalar, IN, EXISTS, correlated subqueries
+
 ### Performance Features
 - **GPU Acceleration**: CUDA-powered query processing
   - Vector operations
@@ -44,7 +61,14 @@ A high-performance, feature-rich LevelDB-based database server with SQL-like int
   - Sorting algorithms
 - **Connection Pooling**: Efficient connection management
 - **Query Caching**: Result cache for frequent queries
+- **Plan Caching**: Execution plan cache for repeated queries
 - **Compression**: Multiple algorithms (gzip, lz4, zstd)
+
+### Monitoring (New in v3.2.0)
+- **Prometheus Metrics**: Query counts, latency, cache hit rates
+- **Health Checks**: Liveness and readiness endpoints
+- **Detailed Status**: Server status via HTTP API
+- **Cache Statistics**: Plan cache performance metrics
 
 ### Backup & Recovery
 - **Hot Backups**: Non-blocking backup operations
@@ -101,7 +125,7 @@ python cli.py -H localhost -p 9999 --tls --ca-cert ca.crt -u admin -P secret123
 
 ```json
 {
-  "version": "3.1.0",
+  "version": "3.2.0",
   "server": {
     "host": "0.0.0.0",
     "port": 9999,
@@ -124,6 +148,38 @@ python cli.py -H localhost -p 9999 --tls --ca-cert ca.crt -u admin -P secret123
     "key_file": "/etc/kosdb/server.key",
     "ca_file": "/etc/kosdb/ca.crt",
     "client_auth": true
+  }
+}
+```
+
+### Metrics and Monitoring (New in v3.2.0)
+
+```json
+{
+  "metrics": {
+    "enabled": true,
+    "host": "0.0.0.0",
+    "port": 9090,
+    "collection_interval": 15,
+    "retention_days": 30
+  }
+}
+```
+
+Access metrics at:
+- `http://localhost:9090/metrics` - Prometheus format
+- `http://localhost:9090/health` - Health checks
+- `http://localhost:9090/status` - Detailed status
+
+### Query Optimizer Configuration (New in v3.2.0)
+
+```json
+{
+  "optimizer": {
+    "enabled": true,
+    "cache_size": 100,
+    "collect_statistics": true,
+    "enable_semi_join": true
   }
 }
 ```
@@ -177,12 +233,22 @@ DROP DATABASE mydb;
 ### Table Operations
 
 ```sql
--- Create table
+-- Create table with constraints
 CREATE TABLE users (
     id INT PRIMARY KEY,
-    name TEXT,
-    email TEXT,
-    age INT
+    name TEXT NOT NULL,
+    email TEXT UNIQUE,
+    age INT CHECK (age >= 18),
+    metadata JSON,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create table with foreign key
+CREATE TABLE orders (
+    id INT PRIMARY KEY,
+    user_id INT REFERENCES users(id) ON DELETE CASCADE,
+    total FLOAT CHECK (total > 0),
+    status TEXT CHECK (status IN ('pending', 'shipped', 'delivered'))
 );
 
 -- Describe table
@@ -192,22 +258,119 @@ DESCRIBE users;
 DROP TABLE users;
 ```
 
+### ALTER TABLE (New in v3.2.0)
+
+```sql
+-- Add column
+ALTER TABLE users ADD COLUMN phone TEXT;
+
+-- Add column with constraints
+ALTER TABLE users ADD COLUMN status TEXT CHECK (status IN ('active', 'inactive'));
+
+-- Drop column
+ALTER TABLE users DROP COLUMN phone;
+
+-- Drop column with CASCADE
+ALTER TABLE users DROP COLUMN email CASCADE;
+
+-- Modify column type
+ALTER TABLE users MODIFY COLUMN age FLOAT;
+
+-- Rename column
+ALTER TABLE users RENAME COLUMN name TO full_name;
+
+-- Add index
+ALTER TABLE users ADD INDEX idx_email (email);
+
+-- Drop index
+ALTER TABLE users DROP INDEX idx_email;
+
+-- Add foreign key constraint
+ALTER TABLE orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id);
+
+-- Add CHECK constraint
+ALTER TABLE users ADD CONSTRAINT chk_age CHECK (age >= 18);
+
+-- Drop constraint
+ALTER TABLE users DROP CONSTRAINT chk_age;
+```
+
 ### Data Operations
 
 ```sql
 -- Insert
-INSERT INTO users VALUES (1, 'Alice', 'alice@example.com', 30);
+INSERT INTO users VALUES (1, 'Alice', 'alice@example.com', 30, '{"city": "NYC"}');
+
+-- Insert with JSON
+INSERT INTO users VALUES (2, 'Bob', 'bob@example.com', 25, '{"city": "LA", "hobbies": ["reading"]}');
 
 -- Select
 SELECT * FROM users;
 SELECT name, email FROM users WHERE age > 25;
 SELECT * FROM users WHERE name LIKE 'A%';
 
+-- JSON extraction
+SELECT name, metadata->city FROM users;
+SELECT name, metadata->>city FROM users;  -- As text
+
 -- Update
 UPDATE users SET age = 31 WHERE id = 1;
 
 -- Delete
 DELETE FROM users WHERE id = 1;
+```
+
+### Subqueries (New in v3.2.0)
+
+```sql
+-- Scalar subquery
+SELECT name, (SELECT COUNT(*) FROM orders) as order_count FROM users;
+
+-- IN subquery
+SELECT * FROM users WHERE id IN (SELECT user_id FROM orders WHERE total > 100);
+
+-- NOT IN subquery
+SELECT * FROM users WHERE id NOT IN (SELECT user_id FROM orders);
+
+-- EXISTS subquery
+SELECT * FROM users WHERE EXISTS (SELECT 1 FROM orders WHERE orders.user_id = users.id);
+
+-- Correlated subquery
+SELECT name, (SELECT MAX(total) FROM orders WHERE orders.user_id = users.id) as max_order
+FROM users;
+```
+
+### Views (New in v3.2.0)
+
+```sql
+-- Create view
+CREATE VIEW active_users AS
+SELECT * FROM users WHERE status = 'active';
+
+-- Query view
+SELECT * FROM active_users WHERE age > 25;
+
+-- Drop view
+DROP VIEW active_users;
+
+-- Show views
+SHOW VIEWS;
+```
+
+### Full-Text Search (New in v3.2.0)
+
+```sql
+-- Create full-text index
+CREATE FULLTEXT INDEX idx_content ON articles(content);
+
+-- Search with natural language mode
+SELECT * FROM articles WHERE MATCH(content) AGAINST('database optimization');
+
+-- Search with boolean mode
+SELECT * FROM articles WHERE MATCH(content) AGAINST('+database -mysql' IN BOOLEAN MODE);
+
+-- Drop full-text index
+DROP FULLTEXT INDEX idx_content ON articles;
 ```
 
 ### User Management
@@ -242,6 +405,22 @@ GRANT ROLE readonly TO alice;
 SHOW ROLES;
 ```
 
+### Transactions
+
+```sql
+-- Begin transaction
+BEGIN TRANSACTION;
+
+-- Or simply
+BEGIN;
+
+-- Commit
+COMMIT;
+
+-- Rollback
+ROLLBACK;
+```
+
 ### Backup Operations
 
 ```sql
@@ -250,6 +429,19 @@ BACKUP DATABASE mydb TO /backups/mydb.backup WITH ENCRYPTION 'mypassword' COMPRE
 
 -- Restore with encryption
 RESTORE DATABASE mydb FROM /backups/mydb.backup WITH ENCRYPTION 'mypassword';
+```
+
+### Query Optimization (New in v3.2.0)
+
+```sql
+-- Explain query plan
+EXPLAIN SELECT * FROM users WHERE age > 25;
+
+-- Show plan cache status
+EXPLAIN CACHE;
+
+-- Analyze table for statistics
+ANALYZE TABLE users;
 ```
 
 ## Environment Variables
@@ -342,6 +534,17 @@ GPU-accelerated operations:
 - Large dataset sorting
 - Aggregate functions
 
+### Query Plan Caching (New in v3.2.0)
+
+```json
+{
+  "optimizer": {
+    "cache_size": 100,
+    "invalidate_on_schema_change": true
+  }
+}
+```
+
 ### Connection Pooling
 
 ```json
@@ -359,7 +562,10 @@ GPU-accelerated operations:
 ### Health Check
 
 ```bash
-# Check server health
+# Check server health via HTTP
+curl http://localhost:9090/health
+
+# Check via CLI
 python cli.py -c "SHOW STATUS"
 ```
 
@@ -368,15 +574,21 @@ python cli.py -c "SHOW STATUS"
 Enable Prometheus metrics:
 ```json
 {
-  "monitoring": {
+  "metrics": {
     "enabled": true,
-    "metrics_port": 9090,
+    "host": "0.0.0.0",
+    "port": 9090,
     "prometheus_enabled": true
   }
 }
 ```
 
-Access metrics at `http://localhost:9090/metrics`
+Access metrics:
+- `http://localhost:9090/metrics` - Prometheus format
+- `http://localhost:9090/health` - Health status
+- `http://localhost:9090/health/live` - Liveness probe
+- `http://localhost:9090/health/ready` - Readiness probe
+- `http://localhost:9090/status` - Detailed server status
 
 ## Troubleshooting
 
@@ -388,15 +600,20 @@ Access metrics at `http://localhost:9090/metrics`
 
 ### Performance Issues
 
-- Check query cache hit rate
+- Check query cache hit rate: `EXPLAIN CACHE`
 - Monitor replication lag
 - Review slow query log
+- Check plan cache statistics
 
 ### Encryption Issues
 
 - Verify passphrase is correct
 - Check key file permissions (should be 600)
 - Ensure cryptography library is installed
+
+## Migration from v3.1 to v3.2
+
+See [MIGRATION_v3.1_to_v3.2.md](MIGRATION_v3.1_to_v3.2.md) for detailed migration guide.
 
 ## API Reference
 
