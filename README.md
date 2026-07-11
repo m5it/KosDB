@@ -282,44 +282,48 @@ See `CONFIGURATION.md` for complete configuration reference.
 Run individual test suites:
 
 ```bash
-# Core database
-python test_parser.py
-python test_query_cache.py
-python test_concurrent_index.py
-python test_distributed_tx.py
+# Core database and parser
+python tests/test_parser.py
+python tests/test_database.py
+python tests/test_commands.py
+python tests/test_query_cache.py
+python tests/test_concurrent_index.py
+python tests/test_distributed_tx.py
 
 # v2.0 features
-python test_agent_protocol.py
-python test_command_parser.py
-python test_validation.py
-python test_session_recovery.py
-python test_query_optimizer.py
-python test_streaming_results.py
-python test_metrics_monitoring.py
-python test_write_ahead_log.py
-python test_schema_migration.py
-python test_vector_search.py
+python tests/test_agent_protocol.py
+python tests/test_validation.py
+python tests/test_session_recovery.py
+python tests/test_query_optimizer.py
+python tests/test_streaming_results.py
+python tests/test_monitoring.py
+python tests/test_write_ahead_log.py
+python tests/test_schema_migration.py
+python tests/test_vector_search.py
+python tests/test_fulltext_search.py
 
 # v2.2 features
-python test_timeseries.py
-python test_multitenant.py
-python test_cdc.py
-python test_materialized_views.py
-python test_security.py
-python test_geospatial.py
-python test_connection_pool.py
-python test_compression.py
-python test_prepared_statements.py
+python tests/test_timeseries.py
+python tests/test_multitenant.py
+python tests/test_cdc.py
+python tests/test_materialized_views.py
+python tests/test_security.py
+python tests/test_geospatial.py
+python tests/test_connection_pool.py
+python tests/test_compression.py
+python tests/test_prepared_statements.py
+
+# Integration and client tests
+python tests/test_client.py
+python tests/test_integration.py
+python tests/test_integration_core.py
+python tests/test_insert_select_values.py
 ```
 
 See `TESTING.md` for detailed testing instructions.
 
 ## Module Documentation
 
-- `SQL_README.md` — SQL Parser documentation
-- `PLANNER_README.md` — Query Planner documentation
-- `STORAGE_README.md` — Storage Engine documentation
-- `REPLICATION_README.md` — Replication documentation
 - `TIMESERIES_README.md` — Time-Series documentation
 - `MULTITENANT_README.md` — Multi-Tenant documentation
 - `CDC_README.md` — Change Data Capture documentation
@@ -343,13 +347,19 @@ KosDB/
 ├── parser.py              # SQL parser
 ├── commands.py            # Command registry and execution
 ├── query_optimizer.py     # Query planning and optimization
+├── query_cache.py         # Query result cache
+├── query_plan_cache.py  # Cached execution plans
 ├── concurrent_index.py    # Online index operations
 ├── write_ahead_log.py     # WAL and ARIES recovery
 ├── replication.py         # Master-slave replication
 ├── failover.py            # Raft-based failover
 ├── distributed_tx.py      # Two-phase commit
 ├── schema_migration.py    # Schema versioning
+├── backup_utils.py        # Backup and restore utilities
+├── restore_commands.py    # Restore command handlers
+├── binlog.py              # Binary log for replication
 ├── vector_search.py       # Vector similarity search
+├── gpu_vector_ops.py      # GPU-accelerated vector operations
 ├── fulltext_search.py     # Full-text indexing
 ├── geospatial.py          # Geospatial queries
 ├── timeseries.py          # Time-series engine
@@ -358,15 +368,26 @@ KosDB/
 ├── materialized_views.py  # Materialized views
 ├── security.py            # Security suite
 ├── compression.py         # Data compression
+├── compression_engine.py  # Compression algorithms
+├── compressed_storage.py  # Compressed storage layer
 ├── connection_pool.py     # Connection pooling
 ├── prepared_statements.py # Prepared statements
-├── session_recovery.py  # Session persistence
+├── session_recovery.py    # Session persistence
 ├── agent_protocol.py      # Inter-agent protocol
 ├── monitoring.py          # Metrics and health
+├── sharding.py            # Database sharding
+├── shard_manager.py       # Shard management
+├── shard_router.py        # Shard routing
+├── sql_protocol.py        # PostgreSQL/MySQL wire protocols
+├── streaming_results.py   # Progressive result streaming
+├── tls_wrapper.py         # TLS encryption wrapper
+├── validated_commands.py  # Command validation layer
+├── validation.py          # Input validation framework
+├── config_validator.py  # Configuration validation
 ├── *_commands.py          # Command handlers per feature
 ├── *_parser.py            # SQL parsers per feature
 ├── *_README.md            # Feature documentation
-├── test_*.py              # Unit tests
+├── tests/                 # Unit and integration tests
 ├── config*.json           # Configuration files
 └── README.md              # This file
 ```
