@@ -1,0 +1,69 @@
+{
+  "version": "2.1.0",
+  "description": "Development configuration - optimized for local development and testing",
+  "server": {
+    "host": "127.0.0.1",
+    "port": 9999,
+    "data_dir": "./data/dev",
+    "max_connections": 10,
+    "connection_timeout": 30,
+    "request_timeout": 60
+  },
+  "tls": {
+    "enabled": false,
+    "cert_file": null,
+    "key_file": null,
+    "ca_file": null,
+    "require_client_cert": false,
+    "ssl_version": "TLS"
+  },
+  "cache": {
+    "enabled": true,
+    "max_size": 100,
+    "default_ttl": 60,
+    "invalidate_on_write": true
+  },
+  "gpu": {
+    "enabled": false,
+    "device_id": 0,
+    "memory_limit_mb": null,
+    "batch_size": 100,
+    "use_mixed_precision": false
+  },
+  "fulltext": {
+    "enabled": true,
+    "stem": true,
+    "min_token_length": 2,
+    "custom_stop_words": []
+  },
+  "vector_search": {
+    "enabled": true,
+    "default_dimension": 384,
+    "metric": "cosine",
+    "use_gpu": false
+  },
+  "replication": {
+    "enabled": false,
+    "role": "master",
+    "slaves": [],
+    "replication_port": null
+  },
+  "failover": {
+    "enabled": false,
+    "node_id": "dev_node",
+    "peers": [],
+    "raft_port": 9000
+  },
+  "monitoring": {
+    "enabled": true,
+    "http_port": 9090,
+    "metrics_path": "/metrics",
+    "health_path": "/health"
+  },
+  "logging": {
+    "level": "DEBUG",
+    "file": "./logs/dev.log",
+    "max_size_mb": 10,
+    "backup_count": 2
+  }
+}

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-LevelDB Socket Server with Database-Driven Authentication and Replication
+LevelDB Socket Server with Database-Driven Authentication, Replication, and TLS Encryption
 """
 
 import socket
@@ -17,17 +17,38 @@ from auth import Authenticator
 from parser import BackupRestoreParser
 from commands import CommandRegistry
 from replication import ReplicationClient, ReplicationServer
-
-
-def setup_admin(db: Database, username: str, password: str):
-    """Initialize admin user."""
-    db._ensure_system_tables()
-    result = db.create_user(username, password, is_admin=True)
-    print(result)
-    result = db.grant_privilege(username, "*", "*", ["ALL"])
-    print(result)
-    print(f"Admin user '{username}' created.")
-
+from tls_wrapper import TLSConfig, TLSSocketWrapper, generate_self_signed_cert
+from auth import Authenticator
+from parser import BackupRestoreParser
+from commands import CommandRegistry
+class ClientHandler(threading.Thread):
+    def __init__(self, client_socket, address, db, authenticator, replication_client=None, tls_wrapper=None):
+        super().__init__(daemon=True)
+        self.client_socket = client_socket
+        self.address = address
+        self.db = db
+        self.authenticator = authenticator
+        self.parser = BackupRestoreParser()
+        self.commands = CommandRegistry(db, replication_client)
+        self.authenticated = False
+        self.session_token = None
+        self.user_info = None
+        self.client_state = {'current_db': None, 'username': None, 'is_admin': False}
+        self.running = True
+        self.tls_wrapper = tls_wrapper
+        self.tls_enabled = tls_wrapper is not None and tls_wrapper.config.enabled
+    
+    def get_connection_info(self):
+        """Get connection security information."""
+        if not self.tls_enabled:
+            return {'encrypted': False, 'protocol': 'plain'}
+        if hasattr(self, 'client_socket') and hasattr(self.client_socket, 'version'):
+            return {
+                'encrypted': True,
+                'version': self.client_socket.version(),
+                'cipher': self.client_socket.cipher()[0] if self.client_socket.cipher() else 'unknown'
+            }
+        return {'encrypted': False}
 
 class ClientHandler(threading.Thread):
     def __init__(self, client_socket, address, db, authenticator, replication_client=None):
@@ -106,61 +127,79 @@ class ClientHandler(threading.Thread):
         
         if cmd == "USER":
             if len(parts) < 2:
-                return "ERROR: Username required"
-            self.pending_username = parts[1].strip()
-            return "OK: Send PASS <password>"
+class SocketServer:
+    def __init__(self, host='0.0.0.0', port=9999, data_dir='./data',
+                 server_id=1, role='master', master_host=None, 
+                 replication_port=None, peer_host=None,
+                 tls_config=None):
+        self.host = host
+        self.port = port
+        self.data_dir = data_dir
+        self.server_id = server_id
+        self.role = role
+        self.master_host = master_host
+        self.replication_port = replication_port
+        self.peer_host = peer_host
         
-        elif cmd == "PASS":
-            if len(parts) < 2:
-                return "ERROR: Password required"
-            if not hasattr(self, 'pending_username'):
-                return "ERROR: USER first"
-            
-            password = parts[1].strip()
-            success, token, user_info = self.authenticator.authenticate(
-                self.pending_username, password
-            )
-            
-            if success:
-                self.authenticated = True
-                self.session_token = token
-                self.user_info = user_info
-                self.client_state['username'] = user_info['username']
-                self.client_state['is_admin'] = user_info['is_admin']
-                msg = f"OK: Welcome {user_info['username']}"
-                if user_info['is_admin']:
-                    msg += " (admin)"
-                return msg + "."
-            else:
-                return "ERROR: Auth failed"
+        # TLS configuration
+        self.tls_config = tls_config or TLSConfig(enabled=False)
+        self.tls_wrapper = TLSSocketWrapper(self.tls_config) if self.tls_config.enabled else None
         
-        elif cmd in ('QUIT', 'EXIT'):
-            return "BYE"
+        # Replication state
+        self.is_slave = (role == 'slave')
+        self.is_master_master = (peer_host is not None)
         
-        return "ERROR: Auth required"
-    
-    def _check_privileges(self, cmd_type, params):
-        """Check if user has permission for command."""
-        if not self.session_token:
-            return False
+        self.db = Database(data_dir, server_id)
+        self.authenticator = Authenticator(self.db)
+        self.server_socket = None
+        self.running = False
         
-        if self.user_info.get('is_admin'):
-            return True
+        # Replication components (initialized later)
+        self.replication_server = None
+        self.replication_client = None
+    def start(self):
+        # Start client socket server
+        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.server_socket.bind((self.host, self.port))
+        self.server_socket.listen(5)
+        self.running = True
         
+        print(f"[SERVER] Started on {self.host}:{self.port}")
+        if self.tls_wrapper and self.tls_wrapper.config.enabled:
+            print(f"[SERVER] TLS encryption enabled")
+            print(f"[SERVER] Certificate: {self.tls_wrapper.config.cert_file}")
+        else:
+            print(f"[SERVER] Warning: Running without TLS encryption")
+        print(f"[SERVER] Server ID: {self.server_id}")
+        print(f"[SERVER] Role: {self.role}")
+        if self.is_slave and self.master_host:
+            print(f"[SERVER] Master: {self.master_host}")
+        if self.is_master_master:
+            print(f"[SERVER] Peer: {self.peer_host}")
+        print(f"[SERVER] Data: {self.db.data_dir}")
+        print("Press Ctrl+C to stop")
         # Check specific privileges
         db_name = self.client_state.get('current_db', '')
         table_name = params.get('table', '*')
-        
-        priv_map = {
-            'CREATE_DB': 'CREATE', 'DROP_DB': 'DROP',
-            'CREATE': 'CREATE', 'DROP': 'DROP',
-            'INSERT': 'INSERT', 'SELECT': 'SELECT',
-            'UPDATE': 'UPDATE', 'DELETE': 'DELETE'
-        }
-        
-        if cmd_type in priv_map:
-            return self.authenticator.check_privilege(
-                self.session_token, db_name, table_name, priv_map[cmd_type]
+        try:
+            while self.running:
+                client_socket, address = self.server_socket.accept()
+                
+                # Wrap with TLS if enabled
+                if self.tls_wrapper:
+                    try:
+                        client_socket = self.tls_wrapper.wrap_server_socket(client_socket)
+                    except ssl.SSLError as e:
+                        print(f"[SERVER] TLS handshake failed for {address}: {e}")
+                        client_socket.close()
+                        continue
+                
+                handler = ClientHandler(
+                    client_socket, address, self.db, self.authenticator,
+                    self.replication_client, self.tls_wrapper
+                )
+                handler.start()
             )
         
         return True
@@ -228,57 +267,84 @@ class SocketServer:
             self.stop()
     
     def _start_replication(self):
-        """Initialize replication based on role."""
-        # Master-Slave: Connect to master if role=slave
-        if self.is_slave and self.master_host:
-            print(f"[REPLICATION] Slave mode - connecting to master {self.master_host}")
-            parts = self.master_host.split(':')
-            master_host = parts[0]
-            master_port = int(parts[1]) if len(parts) > 1 else 9999
-            
-            self.replication_client = ReplicationClient(
-                master_host=master_host,
-                master_port=master_port,
-                username="repl",
-                password="repl",
-                db=self.db,
-                server_id=self.server_id
-            )
-            self.replication_client.start()
-        
-        # Master-Master: Connect to peer
-        if self.peer_host:
-            print(f"[REPLICATION] Master-Master mode - connecting to peer {self.peer_host}")
+def main():
+    parser = argparse.ArgumentParser(description='LevelDB Socket Server with Replication and TLS')
+    
+    # Basic server options
+    parser.add_argument('--prepare_admin', metavar='USER', help='Create admin user')
+    parser.add_argument('--prepare_password', metavar='PASS', help='Admin password')
+    parser.add_argument('--host', default='0.0.0.0', help='Client host (default: 0.0.0.0)')
+    parser.add_argument('--port', type=int, default=9999, help='Client port (default: 9999)')
+    parser.add_argument('--data_dir', default='./data', help='Data directory (default: ./data)')
+    
+    # TLS options
+    parser.add_argument('--tls', action='store_true', help='Enable TLS encryption')
+    parser.add_argument('--tls-cert', metavar='FILE', help='TLS certificate file')
+    parser.add_argument('--tls-key', metavar='FILE', help='TLS private key file')
+    parser.add_argument('--tls-ca', metavar='FILE', help='TLS CA certificate file')
+    parser.add_argument('--tls-client-cert', action='store_true', help='Require client certificates')
+    parser.add_argument('--generate-cert', action='store_true', help='Generate self-signed certificate')
+    
+    # Replication options
+    parser.add_argument('--server-id', type=int, default=1, 
+                       help='Unique server ID (default: 1)')
+    parser.add_argument('--role', choices=['master', 'slave'], default='master',
+                       help='Server role: master or slave (default: master)')
+    parser.add_argument('--master-host', metavar='HOST:PORT',
+                       help='Master host:port for slave replication')
+    parser.add_argument('--replication-port', type=int,
+                       help='Port for replication connections (optional)')
+    parser.add_argument('--peer-host', metavar='HOST:PORT',
+                       help='Peer host:port for master-master replication')
+    
+    args = parser.parse_args()
             parts = self.peer_host.split(':')
             peer_host = parts[0]
             peer_port = int(parts[1]) if len(parts) > 1 else 9999
             
-            self.peer_replication_client = ReplicationClient(
-                master_host=peer_host,
-                master_port=peer_port,
-                username="repl",
-                password="repl",
-                db=self.db,
-                server_id=self.server_id
-            )
-            self.peer_replication_client.start()
+    if args.prepare_admin:
+        password = args.prepare_password
+        if not password:
+            password = getpass.getpass(f"Password for '{args.prepare_admin}': ")
+            confirm = getpass.getpass("Confirm: ")
+            if password != confirm:
+                print("ERROR: Passwords don't match!")
+                sys.exit(1)
         
-        # Start replication server if port specified
-        if self.replication_port:
-            print(f"[REPLICATION] Starting replication server on port {self.replication_port}")
-            self.replication_server = ReplicationServer(
-                host=self.host,
-                port=self.replication_port,
-                db=self.db,
-                authenticator=self.authenticator
-            )
-            self.replication_server.start()
+        db = Database(args.data_dir)
+        setup_admin(db, args.prepare_admin, password)
+        db.close()
+        sys.exit(0)
     
-    def stop(self):
-        self.running = False
-        if self.server_socket:
-            self.server_socket.close()
+    # Generate self-signed certificate if requested
+    if args.generate_cert:
+        cert_path = args.tls_cert or './server.crt'
+        key_path = args.tls_key or './server.key'
+        success, msg = generate_self_signed_cert(cert_path, key_path)
+        print(msg)
+        if not success:
+            sys.exit(1)
+        print(f"\nTo use the certificate, run with:")
+        print(f"  python server.py --tls --tls-cert {cert_path} --tls-key {key_path}")
+        sys.exit(0)
+    
+    # Setup TLS configuration
+    tls_config = TLSConfig(enabled=False)
+    if args.tls:
+        tls_config = TLSConfig(
+            enabled=True,
+            cert_file=args.tls_cert,
+            key_file=args.tls_key,
+            ca_file=args.tls_ca,
+            require_client_cert=args.tls_client_cert
+        )
         
+        valid, msg = tls_config.validate()
+        if not valid:
+            print(f"ERROR: {msg}")
+            print("\nTo generate a self-signed certificate, run:")
+            print("  python server.py --generate-cert")
+            sys.exit(1)
         # Stop replication components
         if self.replication_client:
             print("[REPLICATION] Stopping replication client...")
@@ -291,27 +357,39 @@ class SocketServer:
             self.replication_server.stop()
         
         self.db.close()
-        print("[SERVER] Stopped")
-
-
-def main():
-    parser = argparse.ArgumentParser(description='LevelDB Socket Server with Replication')
+    print("=" * 50)
+    print("LevelDB Socket Server")
+    print("=" * 50)
+    print(f"Host: {args.host}")
+    print(f"Port: {args.port}")
+    if args.tls:
+        print(f"TLS: Enabled")
+        print(f"Cert: {args.tls_cert}")
+    else:
+        print(f"TLS: Disabled")
+    print(f"Server ID: {args.server_id}")
+    print(f"Role: {args.role}")
+    print(f"Data: {args.data_dir}")
+    if args.master_host:
+        print(f"Master: {args.master_host}")
+    if args.peer_host:
+        print(f"Peer: {args.peer_host}")
+    print("\nSetup admin:")
+    print(f"  python server.py --prepare_admin admin --prepare_password <pass>")
+    print("-" * 50)
     
-    # Basic server options
-    parser.add_argument('--prepare_admin', metavar='USER', help='Create admin user')
-    parser.add_argument('--prepare_password', metavar='PASS', help='Admin password')
-    parser.add_argument('--host', default='0.0.0.0', help='Client host (default: 0.0.0.0)')
-    parser.add_argument('--port', type=int, default=9999, help='Client port (default: 9999)')
-    parser.add_argument('--data_dir', default='./data', help='Data directory (default: ./data)')
-    
-    # Replication options
-    parser.add_argument('--server-id', type=int, default=1, 
-                       help='Unique server ID (default: 1)')
-    parser.add_argument('--role', choices=['master', 'slave'], default='master',
-                       help='Server role: master or slave (default: master)')
-    parser.add_argument('--master-host', metavar='HOST:PORT',
-                       help='Master host:port for slave replication')
-    parser.add_argument('--replication-port', type=int,
+    server = SocketServer(
+        host=args.host,
+        port=args.port,
+        data_dir=args.data_dir,
+        server_id=args.server_id,
+        role=args.role,
+        master_host=args.master_host,
+        replication_port=args.replication_port,
+        peer_host=args.peer_host,
+        tls_config=tls_config
+    )
+    server.start()
                        help='Port for replication connections (optional)')
     parser.add_argument('--peer-host', metavar='HOST:PORT',
                        help='Peer host:port for master-master replication')

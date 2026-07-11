@@ -39,20 +39,20 @@ class Colors:
     # Background colors
     BG_BLACK = '\033[40m'
     BG_RED = '\033[41m'
-    BG_GREEN = '\033[42m'
-    BG_YELLOW = '\033[43m'
-    BG_BLUE = '\033[44m'
-    BG_MAGENTA = '\033[45m'
-    BG_CYAN = '\033[46m'
-    BG_WHITE = '\033[47m'
-
-
 class LevelDBClient:
     """Client for connecting to LevelDB Socket Server."""
     
     def __init__(self, host: str = 'localhost', port: int = 9999,
                  username: Optional[str] = None, password: Optional[str] = None):
         self.host = host
+        self.port = port
+        self.username = username
+        self.password = password
+        self.socket: Optional[socket.socket] = None
+        self.authenticated = False
+        self.current_db: Optional[str] = None
+        self.use_colors = sys.stdout.isatty()  # Only use colors in TTY
+        self.cache_enabled = True  # Track cache status
         self.port = port
         self.username = username
         self.password = password
@@ -137,27 +137,17 @@ class LevelDBClient:
     
     def execute(self, command: str) -> str:
         """Execute a command and return response."""
-        if not self.send(command):
-            return "ERROR: Not connected"
-        
-        response = self.receive()
-        if response is None:
-            return "ERROR: Connection lost"
-        
-        # Track current database
-        if command.upper().startswith("USE "):
-            if response.startswith("OK"):
-                self.current_db = command.split()[1].strip()
-        
-        return response
-    
-    def _colorize(self, text: str, color: str) -> str:
-        """Apply color if colors are enabled."""
-        if self.use_colors:
-            return f"{color}{text}{Colors.RESET}"
-        return text
-    
-    def format_response(self, response: str) -> str:
+        self.commands = [
+            'SELECT', 'INSERT', 'UPDATE', 'DELETE',
+            'CREATE', 'DROP', 'USE', 'SHOW',
+            'DATABASES', 'TABLES', 'USERS',
+            'HELP', 'QUIT', 'EXIT',
+            'FROM', 'WHERE', 'ORDER', 'BY', 'ASC', 'DESC',
+            'INTO', 'VALUES', 'SET',
+            'MASTER', 'SLAVE', 'STATUS',
+            'START', 'STOP', 'RESET',
+            'CACHE', 'ENABLE', 'DISABLE', 'STATS',
+        ]
         """Format server response with colors."""
         if response.startswith("OK"):
             # Success message
@@ -182,27 +172,20 @@ class LevelDBClient:
         elif response.startswith("Empty set"):
             return self._colorize(response, Colors.YELLOW)
         
-        elif "row(s) in set" in response:
-            return self._colorize(response, Colors.CYAN)
-        
-        else:
-            return response
-    
-    def _format_table(self, lines: List[str]) -> List[str]:
-        """Format table output with colors."""
-        result = []
-        for i, line in enumerate(lines):
-            if line.startswith('+--'):
-                # Separator line - dim it
-                result.append(self._colorize(line, Colors.DIM))
-            elif i == 0 and '|' in line:
-                # Header row
-                result.append(self._colorize(line, Colors.BOLD + Colors.CYAN))
-            else:
-                result.append(line)
-        return result
-
-
+                if command.lower() in ('quit', 'exit', 'q'):
+                    break
+                
+                if command.lower() == 'help':
+                    self._print_help()
+                    continue
+                
+                # Handle CACHE commands locally
+                if command.upper().startswith('CACHE '):
+                    self._handle_cache_command(command)
+                    continue
+                
+                response = self.client.execute(command)
+                print(self.client.format_response(response))
 class InteractiveShell:
     """Interactive shell with readline support."""
     
@@ -214,17 +197,53 @@ class InteractiveShell:
             'CREATE', 'DROP', 'USE', 'SHOW',
             'DATABASES', 'TABLES', 'USERS',
             'HELP', 'QUIT', 'EXIT',
-            'FROM', 'WHERE', 'ORDER', 'BY', 'ASC', 'DESC',
-            'INTO', 'VALUES', 'SET',
-            'MASTER', 'SLAVE', 'STATUS',
-            'START', 'STOP', 'RESET',
-        ]
-        self.setup_readline()
+            self.save_history()
+            self.client.disconnect()
+            print(self.client._colorize("\nGoodbye!", Colors.CYAN))
     
-    def setup_readline(self):
-        """Configure readline for history and completion."""
-        try:
-            import readline
+    def _print_help(self):
+        """Print help information."""
+        help_text = """
+Available Commands:
+  Database:     CREATE DATABASE, DROP DATABASE, USE, SHOW DATABASES
+  Tables:       CREATE TABLE, DROP TABLE, SHOW TABLES
+  Data:         INSERT, SELECT, UPDATE, DELETE
+  Transactions: BEGIN, COMMIT, ROLLBACK
+  Cache:        CACHE ENABLE, CACHE DISABLE, CACHE STATS, CACHE CLEAR
+  Replication:  SHOW MASTER STATUS, SHOW SLAVE STATUS
+  Other:        HELP, QUIT, EXIT
+"""
+        print(help_text)
+    
+    def _handle_cache_command(self, command: str):
+        """Handle cache control commands."""
+        parts = command.upper().split()
+        
+        if len(parts) < 2:
+            print("ERROR: CACHE ENABLE|DISABLE|STATS|CLEAR")
+            return
+        
+        action = parts[1]
+        
+        if action == 'ENABLE':
+            self.client.cache_enabled = True
+            print(self.client._colorize("OK: Query cache enabled", Colors.GREEN))
+        
+        elif action == 'DISABLE':
+            self.client.cache_enabled = False
+            print(self.client._colorize("OK: Query cache disabled", Colors.YELLOW))
+        
+        elif action == 'STATS':
+            # Send to server for actual stats
+            response = self.client.execute("CACHE STATS")
+            print(self.client.format_response(response))
+        
+        elif action == 'CLEAR':
+            response = self.client.execute("CACHE CLEAR")
+            print(self.client.format_response(response))
+        
+        else:
+            print(f"ERROR: Unknown CACHE command: {action}")
             import rlcompleter
             
             # Load history

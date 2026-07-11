@@ -3,7 +3,7 @@ Vector Similarity Search for KosDB
 
 Implements vector storage and similarity search using embeddings
 for semantic queries. Supports cosine similarity, Euclidean distance,
-and approximate nearest neighbor search.
+and approximate nearest neighbor search with GPU acceleration.
 """
 
 import math
@@ -17,32 +17,48 @@ from dataclasses import dataclass, field
 from collections import defaultdict
 import threading
 
+# Import GPU operations if available
+try:
+    from gpu_vector_ops import GPUVectorOps, GPUConfig, get_gpu_ops
+    GPU_AVAILABLE = True
+except ImportError:
+    GPU_AVAILABLE = False
+from dataclasses import dataclass, field
+from collections import defaultdict
+import threading
+
 
 class DistanceMetric(Enum):
     """Distance metrics for vector comparison."""
     COSINE = auto()      # Cosine similarity (1 - cosine distance)
     EUCLIDEAN = auto()   # L2 distance
-    DOT_PRODUCT = auto() # Dot product similarity
-    MANHATTAN = auto()   # L1 distance
-
-
-@dataclass
-class VectorDocument:
-    """A document with vector embedding."""
-    doc_id: str
-    vector: List[float]
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    created_at: float = field(default_factory=lambda: __import__('time').time())
+class VectorIndex:
+    """
+    In-memory vector index for similarity search.
+    Supports brute-force and approximate search methods with GPU acceleration.
+    """
     
-    def __post_init__(self):
-        # Normalize vector for cosine similarity
-        self._norm = math.sqrt(sum(x * x for x in self.vector))
+    def __init__(self, dimension: int, metric: DistanceMetric = DistanceMetric.COSINE,
+                 use_gpu: bool = True):
+        self.dimension = dimension
+        self.metric = metric
+        self._documents: Dict[str, VectorDocument] = {}
+        self._lock = threading.RLock()
+        
+        # GPU support
+        self._gpu_ops: Optional[GPUVectorOps] = None
+        if use_gpu and GPU_AVAILABLE:
+            self._gpu_ops = get_gpu_ops()
+        
+        # For IVF (Inverted File Index)
+        self._n_clusters = 0
+        self._centroids: List[List[float]] = []
+        self._inverted_lists: Dict[int, List[str]] = defaultdict(list)
+        self._is_trained = False
     
-    def normalize(self) -> List[float]:
-        """Get normalized vector."""
-        if self._norm == 0:
-            return self.vector
-        return [x / self._norm for x in self.vector]
+    def _use_gpu(self) -> bool:
+        """Check if GPU should be used."""
+        return self._gpu_ops is not None and self._gpu_ops.is_available
 
 
 class VectorIndex:
@@ -96,71 +112,100 @@ class VectorIndex:
         return True
     
     def remove(self, doc_id: str) -> bool:
-        """
-        Remove document from index.
-        
-        Args:
-            doc_id: Document ID to remove
-        
-        Returns:
-            True if removed
-        """
-        with self._lock:
-            if doc_id not in self._documents:
-                return False
-            
-            doc = self._documents[doc_id]
-            del self._documents[doc_id]
-            
-            # Remove from inverted list
-            if self._is_trained:
-                cluster_id = self._assign_to_cluster(doc.vector)
-                if doc_id in self._inverted_lists[cluster_id]:
-                    self._inverted_lists[cluster_id].remove(doc_id)
-            
-            return True
-    
-    def search(self, query_vector: List[float], k: int = 10,
-               filter_fn: Optional[Callable[[VectorDocument], bool]] = None) -> List[Tuple[str, float]]:
-        """
-        Search for k nearest neighbors.
-        
-        Args:
-            query_vector: Query embedding
-            k: Number of results
-            filter_fn: Optional filter function
-        
-        Returns:
-            List of (doc_id, score) tuples, sorted by score
-        """
-        if len(query_vector) != self.dimension:
-            raise ValueError(f"Expected dimension {self.dimension}, got {len(query_vector)}")
-        
-        with self._lock:
-            # Use IVF if trained, otherwise brute force
-            if self._is_trained and self._n_clusters > 0:
-                return self._ivf_search(query_vector, k, filter_fn)
-            else:
-                return self._brute_force_search(query_vector, k, filter_fn)
-    
     def _brute_force_search(self, query_vector: List[float], k: int,
                            filter_fn: Optional[Callable] = None) -> List[Tuple[str, float]]:
         """Brute force search over all documents."""
-        scores = []
+        with self._lock:
+            doc_list = list(self._documents.values())
         
-        for doc_id, doc in self._documents.items():
-            if filter_fn and not filter_fn(doc):
-                continue
-            
-            score = self._compute_similarity(query_vector, doc.vector)
-            scores.append((doc_id, score))
+        # Apply filter
+        if filter_fn:
+            doc_list = [d for d in doc_list if filter_fn(d)]
         
-        # Return top k
-        scores.sort(key=lambda x: x[1], reverse=True)
-        return scores[:k]
+        if not doc_list:
+            return []
+        
+        # Use GPU if available and enough documents
+        if self._use_gpu() and len(doc_list) >= 10:
+            return self._gpu_brute_force_search(query_vector, doc_list, k)
+        
+        # CPU fallback
+        return self._cpu_brute_force_search(query_vector, doc_list, k)
     
-    def _ivf_search(self, query_vector: List[float], k: int,
-                   filter_fn: Optional[Callable] = None) -> List[Tuple[str, float]]:
+    def _gpu_brute_force_search(self, query_vector: List[float],
+                                 doc_list: List[VectorDocument],
+                                 k: int) -> List[Tuple[str, float]]:
+        """GPU-accelerated brute force search."""
+        try:
+            vectors = [doc.vector for doc in doc_list]
+            
+            if self.metric == DistanceMetric.COSINE:
+                scores = self._gpu_ops.cosine_similarity_batch(query_vector, vectors)
+            elif self.metric == DistanceMetric.EUCLIDEAN:
+                scores = self._gpu_ops.euclidean_distance_batch(query_vector, vectors)
+                # Convert distance to score (negative for sorting)
+                scores = [-s for s in scores]
+            elif self.metric == DistanceMetric.DOT_PRODUCT:
+                scores = self._gpu_ops.dot_product_batch(query_vector, vectors)
+            else:
+                # Fallback for unsupported metrics
+                return self._cpu_brute_force_search(query_vector, doc_list, k)
+            
+            # Create results
+            results = [(doc_list[i].doc_id, scores[i]) for i in range(len(doc_list))]
+            results.sort(key=lambda x: x[1], reverse=True)
+            return results[:k]
+            
+        except Exception as e:
+            print(f"[VectorSearch] GPU search failed, using CPU: {e}")
+            return self._cpu_brute_force_search(query_vector, doc_list, k)
+    
+    def _cpu_brute_force_search(self, query_vector: List[float],
+                                 doc_list: List[VectorDocument],
+    def get_stats(self) -> Dict[str, Any]:
+        """Get index statistics."""
+        with self._lock:
+            stats = {
+                'dimension': self.dimension,
+                'metric': self.metric.name,
+                'num_documents': len(self._documents),
+                'num_clusters': self._n_clusters,
+                'is_trained': self._is_trained,
+                'gpu_enabled': self._use_gpu()
+            }
+            
+            if self._use_gpu():
+                gpu_info = self._gpu_ops.get_device_info()
+                stats['gpu_info'] = gpu_info
+            
+            return stats
+        """
+        if len(self._documents) < n_clusters:
+            return
+        
+        with self._lock:
+            vectors = [doc.vector for doc in self._documents.values()]
+            
+            # Use GPU k-means if available
+            if self._use_gpu() and len(vectors) > 100:
+                try:
+                    centroids, labels = self._gpu_ops.kmeans_cluster(vectors, n_clusters)
+                except Exception as e:
+                    print(f"[VectorSearch] GPU k-means failed, using CPU: {e}")
+                    centroids, labels = self._kmeans_cpu(vectors, n_clusters)
+            else:
+                centroids, labels = self._kmeans_cpu(vectors, n_clusters)
+            
+            self._centroids = centroids
+            self._n_clusters = n_clusters
+            
+            # Build inverted lists
+            self._inverted_lists.clear()
+            doc_ids = list(self._documents.keys())
+            for i, label in enumerate(labels):
+                self._inverted_lists[label].append(doc_ids[i])
+            
+            self._is_trained = True
         """Search using Inverted File Index."""
         # Find nearest centroids
         centroid_scores = [
@@ -198,32 +243,51 @@ class VectorIndex:
             raise ValueError(f"Unknown metric: {self.metric}")
     
     @staticmethod
-    def _cosine_similarity(v1: List[float], v2: List[float]) -> float:
-        """Compute cosine similarity."""
-        dot = sum(a * b for a, b in zip(v1, v2))
-        norm1 = math.sqrt(sum(a * a for a in v1))
-        norm2 = math.sqrt(sum(b * b for b in v2))
-        
-        if norm1 == 0 or norm2 == 0:
-            return 0.0
-        
-        return dot / (norm1 * norm2)
+class VectorSearchEngine:
+    """
+    High-level vector search engine with multiple indexes and GPU support.
+    """
     
-    @staticmethod
-    def _euclidean_distance(v1: List[float], v2: List[float]) -> float:
-        """Compute Euclidean distance."""
-        return math.sqrt(sum((a - b) ** 2 for a, b in zip(v1, v2)))
+    def __init__(self, use_gpu: bool = True, gpu_config: Optional[GPUConfig] = None):
+        self._indexes: Dict[str, VectorIndex] = {}
+        self._lock = threading.RLock()
+        self._use_gpu = use_gpu and GPU_AVAILABLE
+        
+        # Initialize GPU if requested
+        if self._use_gpu and gpu_config:
+            self._gpu_ops = configure_gpu(
+                enabled=gpu_config.enabled,
+                device_id=gpu_config.device_id,
+                memory_limit_mb=gpu_config.memory_limit_mb,
+                batch_size=gpu_config.batch_size
+            )
+        elif self._use_gpu:
+            self._gpu_ops = get_gpu_ops()
+        else:
+            self._gpu_ops = None
     
-    def train_ivf(self, n_clusters: int = 10):
+    def create_index(self, name: str, dimension: int,
+                     metric: DistanceMetric = DistanceMetric.COSINE) -> VectorIndex:
         """
-        Train IVF index using k-means clustering.
+        Create new vector index.
         
         Args:
-            n_clusters: Number of clusters
-        """
-        if len(self._documents) < n_clusters:
-            return  # Not enough documents
+            name: Index name
+            dimension: Vector dimension
+            metric: Distance metric
         
+        Returns:
+            Created index
+        """
+        with self._lock:
+            if name in self._indexes:
+                raise ValueError(f"Index {name} already exists")
+            
+            index = VectorIndex(dimension, metric, use_gpu=self._use_gpu)
+            if self._gpu_ops:
+                index._gpu_ops = self._gpu_ops
+            self._indexes[name] = index
+            return index
         with self._lock:
             vectors = [doc.vector for doc in self._documents.values()]
             self._centroids = self._kmeans(vectors, n_clusters)
