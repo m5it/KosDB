@@ -1,0 +1,2 @@
+[2026-07-11 03:08:53] CMD: cd test && for f in testtest_*.py; do mv $f "${f#test}"; done | SUCCESS: True | OUTPUT_LEN: 80
+[2026-07-11 03:08:54] CMD: ls -la | SUCCESS: True | OUTPUT_LEN: 3590
