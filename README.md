@@ -291,16 +291,27 @@ Check health at `http://localhost:9090/health`
 
 ## Testing
 
-Run integration tests:
+Run all tests:
 
 ```bash
 python -m pytest tests/ -v
 ```
 
-Run specific test:
+Run specific component tests:
 
 ```bash
-python -m pytest tests/test_vector_search.py -v
+python -m pytest test_agent_protocol.py -v
+python -m pytest test_command_parser.py -v
+python -m pytest test_validation.py -v
+python -m pytest test_session_recovery.py -v
+python -m pytest test_query_optimizer.py -v
+python -m pytest test_concurrent_index.py -v
+python -m pytest test_streaming_results.py -v
+python -m pytest test_metrics_monitoring.py -v
+python -m pytest test_write_ahead_log.py -v
+python -m pytest test_distributed_tx.py -v
+python -m pytest test_schema_migration.py -v
+python -m pytest test_vector_search.py -v
 ```
 
 ## Performance
@@ -345,45 +356,62 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
 ```
 .
 ├── server.py              # Main server entry point
-├── cli.py                # Command-line client
-├── database.py           # Database operations
-├── commands.py           # Command handlers
-├── parser.py             # SQL parser
-├── auth.py               # Authentication
-├── replication.py        # Replication system
-├── binlog.py             # Binary logging
-├── distributed_tx.py     # Distributed transactions
-├── failover.py           # Raft failover
-├── monitoring.py         # Metrics and health
-├── agent_protocol.py     # Agent communication
-├── command_parser.py     # SQL parsing
-├── validation.py         # Input validation
-├── session_recovery.py   # Session persistence
-├── query_optimizer.py    # Query optimization
-├── concurrent_index.py   # Online indexing
-├── streaming_results.py  # Result streaming
-├── metrics_monitoring.py # Metrics collection
-├── write_ahead_log.py    # WAL implementation
-├── schema_migration.py   # Schema migrations
-├── vector_search.py      # Vector similarity search
-├── tests/                # Test suite
-├── README.md             # This file
-├── CHANGELOG.md          # Release notes
-├── requirements.txt      # Dependencies
-└── setup.py             # Package setup
+├── cli.py                 # Command-line client
+├── database.py            # Database operations
+├── commands.py            # Command handlers
+├── parser.py              # SQL parser
+├── auth.py                # Authentication
+├── replication.py         # Replication system
+├── binlog.py              # Binary logging
+├── distributed_tx.py      # Distributed transactions
+├── failover.py            # Raft failover
+├── monitoring.py          # Metrics and health
+├── agent_protocol.py      # Agent communication
+├── command_parser.py      # SQL parsing
+├── validation.py          # Input validation
+├── session_recovery.py    # Session persistence
+├── query_optimizer.py     # Query optimization
+├── concurrent_index.py    # Online indexing
+├── streaming_results.py   # Result streaming
+├── metrics_monitoring.py  # Metrics collection
+├── write_ahead_log.py     # WAL implementation
+├── schema_migration.py    # Schema migrations
+├── vector_search.py       # Vector similarity search
+├── tests/                 # Test suite
+├── README.md              # This file
+├── CHANGELOG.md           # Release notes
+├── requirements.txt       # Dependencies
+└── setup.py               # Package setup
 ```
+
+### Component Overview
+
+| Component | File | Description |
+|-----------|------|-------------|
+| Agent Protocol | `agent_protocol.py` | Inter-agent messaging with capability registry |
+| Command Parser | `command_parser.py` | Full SQL tokenizer and parser |
+| Input Validation | `validation.py` | Schema-based validation framework |
+| Session Recovery | `session_recovery.py` | Persistent session management |
+| Query Optimizer | `query_optimizer.py` | Cost-based query planning |
+| Concurrent Index | `concurrent_index.py` | Online index operations |
+| Streaming Results | `streaming_results.py` | Progressive result delivery |
+| Metrics | `metrics_monitoring.py` | Prometheus-compatible metrics |
+| Write-Ahead Log | `write_ahead_log.py` | ARIES-style WAL |
+| Distributed TX | `distributed_tx.py` | Two-phase commit coordinator |
+| Schema Migration | `schema_migration.py` | Versioned schema changes |
+| Vector Search | `vector_search.py` | Semantic similarity search |
 
 ### Adding New Commands
 
 1. Add pattern to `parser.py`
 2. Implement command in `commands.py`
 3. Register in `CommandRegistry`
-4. Add tests in `test_integration.py`
+4. Add tests in appropriate test file
 
 ## Version History
 
-- **v2.0.0** (2025-01-09) - Major release with 12 advanced features
-- **v1.0.0** (2025-01-09) - Initial release with core features
+- **v2.0.0** (2026-01-09) - Major release with 12 advanced features
+- **v1.0.0** (2026-01-09) - Initial release with core features
 
 ## Roadmap
 
