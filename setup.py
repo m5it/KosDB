@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Setup script for LevelDB Socket Server
+Setup script for KosDB - Distributed Database System
 """
 
 from setuptools import setup, find_packages
@@ -12,17 +12,17 @@ with open("requirements.txt", "r", encoding="utf-8") as fh:
     requirements = [line.strip() for line in fh if line.strip() and not line.startswith("#")]
 
 setup(
-    name="leveldb-socket-server",
-    version="1.0.0",
-    author="Your Name",
-    author_email="your.email@example.com",
-    description="A distributed database system built on LevelDB",
+    name="kosdb",
+    version="2.0.0",
+    author="Development Team",
+    author_email="w4d4f4k@gmail.com",
+    description="A high-performance distributed database system with vector search and schema migrations",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/leveldb-socket-server",
+    url="https://github.com/m5it/KosDB",
     packages=find_packages(),
     classifiers=[
-        "Development Status :: 4 - Beta",
+        "Development Status :: 5 - Production/Stable",
         "Intended Audience :: Developers",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
@@ -31,15 +31,18 @@ setup(
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
         "Topic :: Database",
+        "Topic :: Database :: Database Engines/Servers",
         "Topic :: Software Development :: Libraries :: Python Modules",
     ],
     python_requires=">=3.8",
     install_requires=requirements,
     entry_points={
         "console_scripts": [
-            "leveldb-server=server:main",
-            "leveldb-cli=cli:main",
+            "kosdb-server=server:main",
+            "kosdb-cli=cli:main",
+            "kosdb=kosdb_cli:main",
         ],
     },
 )
