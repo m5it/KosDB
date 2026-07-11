@@ -7,7 +7,7 @@ Integrates compression functionality with the CLI.
 import logging
 import time
 from typing import Dict, Any, Optional, List
-from compression import CompressionAlgorithm, CompressionManager, compress_data, decompress_data
+from compression_engine import CompressionAlgorithm, CompressionManager, compress_data, decompress_data
 
 logger = logging.getLogger(__name__)
 

@@ -123,18 +123,17 @@ class ClientHandler(threading.Thread):
                 return "ERROR: Send USER first"
             
             password = parts[1]
-            success, result = self.authenticator.authenticate(self.username, password)
+            success, token, user_info = self.authenticator.authenticate(self.username, password)
             
             if success:
                 self.authenticated = True
-                self.session_token = result
-                self.user_info = self.authenticator.get_user_info(self.username)
+                self.session_token = token
+                self.user_info = user_info
                 self.client_state['username'] = self.username
-                self.client_state['is_admin'] = self.user_info.get('is_admin', False)
+                self.client_state['is_admin'] = user_info.get('is_admin', False)
                 return f"OK: Welcome {self.username}"
             else:
-                return f"ERROR: {result}"
-        
+                return "ERROR: Authentication failed"
         elif cmd == "QUIT":
             return "BYE"
         

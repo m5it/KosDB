@@ -1,13 +1,13 @@
 {
-  "mig_1783710153_0.0.1": {
-    "migration_id": "mig_1783710153_0.0.1",
+  "mig_1783785259_0.0.1": {
+    "migration_id": "mig_1783785259_0.0.1",
     "version": "0.0.1",
     "description": "Test",
     "author": "system",
-    "created_at": 1783710153.9215357,
+    "created_at": 1783785259.3832674,
     "steps": [
       {
-        "step_id": "mig_1783710153_0.0.1_step_0",
+        "step_id": "mig_1783785259_0.0.1_step_0",
         "operation": "CREATE_TABLE",
         "description": "Create table",
         "dependencies": [],
@@ -15,8 +15,8 @@
       }
     ],
     "status": "ROLLED_BACK",
-    "applied_at": 1783710153.921546,
-    "rolled_back_at": 1783710153.9215941,
-    "execution_time_ms": 0.0030994415283203125
+    "applied_at": 1783785259.3832765,
+    "rolled_back_at": 1783785259.3833232,
+    "execution_time_ms": 0.0026226043701171875
   }
 }

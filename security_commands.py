@@ -1,6 +1,6 @@
-"""
+\"\"\"
 Command handlers for security operations.
-"""
+\"\"\"
 
 import time
 import logging
@@ -12,8 +12,8 @@ from security import (
     SQLInjectionError,
     PermissionDeniedError
 )
-    SQLInjectionError,
-    PermissionDeniedError
+
+logger = logging.getLogger(__name__)
 )
 
 logger = logging.getLogger(__name__)
