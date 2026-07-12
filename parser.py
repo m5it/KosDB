@@ -1,9 +1,10 @@
+
 """
 SQL-like Command Parser for LevelDB Socket Server
 """
 
 import re
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional, Tuple, List
 
 
 class CommandParser:
@@ -93,33 +94,91 @@ class CommandParser:
                 r'^\s*(?:QUIT|EXIT)\s*$',
                 re.IGNORECASE
             ),
+            'BACKUP': re.compile(
+                r'^\s*BACKUP\s+(?:TABLE\s+(?P<table>\w+)|DATABASE\s+(?P<database>\w+))?\s+TO\s+["\']?(?P<file>[^"\']+)["\']?\s*$',
+                re.IGNORECASE
+            ),
+            'RESTORE': re.compile(
+                r'^\s*RESTORE\s+FROM\s+["\']?(?P<file>[^"\']+)["\']?(?:\s+TO\s+(?P<target>\w+))?\s*$',
+                re.IGNORECASE
+            ),
+            'VERIFY_BACKUP': re.compile(
+                r'^\s*VERIFY\s+BACKUP\s+["\']?(?P<file>[^"\']+)["\']?\s*$',
+                re.IGNORECASE
+            ),
+            'SHOW_BACKUPS': re.compile(
+                r'^\s*SHOW\s+BACKUPS(?:\s+(?P<path>\S+))?\s*$',
+                re.IGNORECASE
+            ),
+            'BEGIN': re.compile(
+                r'^\s*BEGIN(?:\s+TRANSACTION)?\s*$',
+                re.IGNORECASE
+            ),
+            'COMMIT': re.compile(
+                r'^\s*COMMIT(?:\s+TRANSACTION)?\s*$',
+                re.IGNORECASE
+            ),
+            'ROLLBACK': re.compile(
+                r'^\s*ROLLBACK(?:\s+TRANSACTION)?\s*$',
+                re.IGNORECASE
+            ),
+            'METRICS': re.compile(
+                r'^\s*METRICS\s*$',
+                re.IGNORECASE
+            ),
+            'HEALTH': re.compile(
+                r'^\s*HEALTH\s*$',
+                re.IGNORECASE
+            ),
+            'PROMETHEUS': re.compile(
+                r'^\s*PROMETHEUS\s*$',
+                re.IGNORECASE
+            ),
+            'BATCH_STATUS': re.compile(
+                r'^\s*BATCH\s+STATUS(?:\s+(?P<batch_id>[\w-]+))?\s*$',
+                re.IGNORECASE
+            ),
         }
     
     def parse(self, command: str) -> Tuple[str, Optional[Dict[str, Any]]]:
         """Parse a command string into (command_type, parameters)"""
         command = command.strip()
         
-        # Check for special commands first
-        if command.upper() == 'HELP':
+        # Check for simple commands first
+        cmd_upper = command.upper()
+        
+        if cmd_upper == 'HELP':
             return 'HELP', {}
-        if command.upper() in ('QUIT', 'EXIT'):
+        if cmd_upper in ('QUIT', 'EXIT'):
             return 'QUIT', {}
-        if command.upper() == 'SHOW TABLES':
+        if cmd_upper == 'SHOW TABLES':
             return 'SHOW_TABLES', {}
-        if command.upper() == 'SHOW DATABASES':
+        if cmd_upper == 'SHOW DATABASES':
             return 'SHOW_DATABASES', {}
-        if command.upper() == 'SHOW USERS':
+        if cmd_upper == 'SHOW USERS':
             return 'SHOW_USERS', {}
-        if command.upper() == 'SHOW MASTER STATUS':
+        if cmd_upper == 'SHOW MASTER STATUS':
             return 'SHOW_MASTER_STATUS', {}
-        if command.upper() == 'SHOW SLAVE STATUS':
+        if cmd_upper == 'SHOW SLAVE STATUS':
             return 'SHOW_SLAVE_STATUS', {}
-        if command.upper() == 'START SLAVE':
+        if cmd_upper == 'START SLAVE':
             return 'START_SLAVE', {}
-        if command.upper() == 'STOP SLAVE':
+        if cmd_upper == 'STOP SLAVE':
             return 'STOP_SLAVE', {}
-        if command.upper() == 'RESET SLAVE':
+        if cmd_upper == 'RESET SLAVE':
             return 'RESET_SLAVE', {}
+        if cmd_upper == 'BEGIN' or cmd_upper == 'BEGIN TRANSACTION':
+            return 'BEGIN', {}
+        if cmd_upper == 'COMMIT' or cmd_upper == 'COMMIT TRANSACTION':
+            return 'COMMIT', {}
+        if cmd_upper == 'ROLLBACK' or cmd_upper == 'ROLLBACK TRANSACTION':
+            return 'ROLLBACK', {}
+        if cmd_upper == 'METRICS':
+            return 'METRICS', {}
+        if cmd_upper == 'HEALTH':
+            return 'HEALTH', {}
+        if cmd_upper == 'PROMETHEUS':
+            return 'PROMETHEUS', {}
         
         # Try to match patterns
         for cmd_type, pattern in self.patterns.items():
@@ -204,16 +263,19 @@ class CommandParser:
                 col = col.strip()
                 val = val.strip()
                 
+                # Try to convert value
                 try:
                     if '.' in val:
-                        result[col] = float(val)
+                        val = float(val)
                     else:
-                        result[col] = int(val)
+                        val = int(val)
                 except ValueError:
+                    # Keep as string, remove quotes if present
                     if (val.startswith("'") and val.endswith("'")) or \
                        (val.startswith('"') and val.endswith('"')):
                         val = val[1:-1]
-                    result[col] = val
+                
+                result[col] = val
         
         return result
     
@@ -228,128 +290,26 @@ class CommandParser:
                 col = col.strip()
                 val = val.strip()
                 
+                # Try to convert value
                 try:
                     if '.' in val:
-                        conditions[col] = float(val)
+                        val = float(val)
                     else:
-                        conditions[col] = int(val)
+                        val = int(val)
                 except ValueError:
+                    # Keep as string, remove quotes if present
                     if (val.startswith("'") and val.endswith("'")) or \
                        (val.startswith('"') and val.endswith('"')):
                         val = val[1:-1]
-                    conditions[col] = val
+                
+                conditions[col] = val
         
         return conditions
 
 
 class BackupRestoreParser(CommandParser):
-    """Extended parser with backup/restore and transaction commands."""
+    """Extended parser with backup/restore/transaction/batch commands."""
     
     def __init__(self):
         super().__init__()
-        # Add backup/restore patterns
-        self.patterns['BACKUP_DB'] = re.compile(
-            r'^\s*BACKUP\s+DATABASE\s+(?P<database>\w+)\s+TO\s+["\']?(?P<file>[^"\']+)["\']?\s*$',
-            re.IGNORECASE
-        )
-        self.patterns['RESTORE_DB'] = re.compile(
-            r'^\s*RESTORE\s+DATABASE\s+(?P<database>\w+)\s+FROM\s+["\']?(?P<file>[^"\']+)["\']?\s*$',
-            re.IGNORECASE
-        )
-        self.patterns['BACKUP_TABLE'] = re.compile(
-            r'^\s*BACKUP\s+TABLE\s+(?P<table>\w+)\s+TO\s+["\']?(?P<file>[^"\']+)["\']?\s*$',
-            re.IGNORECASE
-        )
-        self.patterns['SHOW_BACKUPS'] = re.compile(
-            r'^\s*SHOW\s+BACKUPS(?:\s+(?P<path>\S+))?\s*$',
-            re.IGNORECASE
-        )
-        self.patterns['VERIFY_BACKUP'] = re.compile(
-            r'^\s*VERIFY\s+BACKUP\s+["\']?(?P<file>[^"\']+)["\']?\s*$',
-            re.IGNORECASE
-        )
-        # Transaction patterns
-        self.patterns['BEGIN'] = re.compile(
-            r'^\s*BEGIN\s*$',
-            re.IGNORECASE
-        )
-        self.patterns['COMMIT'] = re.compile(
-            r'^\s*COMMIT\s*$',
-            re.IGNORECASE
-        )
-        self.patterns['ROLLBACK'] = re.compile(
-            r'^\s*ROLLBACK\s*$',
-            re.IGNORECASE
-        )
-        # Distributed transaction patterns
-        self.patterns['DIST_TX_BEGIN'] = re.compile(
-            r'^\s*DIST_TX_BEGIN\s+(?P<operations>.+)$',
-            re.IGNORECASE
-        )
-        self.patterns['DIST_TX_STATUS'] = re.compile(
-            r'^\s*DIST_TX_STATUS\s+(?P<tx_id>[\w-]+)$',
-            re.IGNORECASE
-        )
-        self.patterns['DIST_TX_LIST'] = re.compile(
-            r'^\s*DIST_TX_LIST\s*$',
-            re.IGNORECASE
-        )
-        # Failover patterns
-        self.patterns['FAILOVER_STATUS'] = re.compile(
-            r'^\s*FAILOVER\s+STATUS\s*$',
-            re.IGNORECASE
-        )
-        self.patterns['FAILOVER_PROPOSE'] = re.compile(
-            r'^\s*FAILOVER\s+PROPOSE\s+(?P<command>.+)$',
-            re.IGNORECASE
-        )
-        # Monitoring patterns
-        self.patterns['METRICS'] = re.compile(
-            r'^\s*METRICS\s*$',
-            re.IGNORECASE
-        )
-        self.patterns['HEALTH'] = re.compile(
-            r'^\s*HEALTH\s*$',
-            re.IGNORECASE
-        )
-        self.patterns['PROMETHEUS'] = re.compile(
-            r'^\s*PROMETHEUS\s*$',
-            re.IGNORECASE
-        )
-    
-    def parse(self, command: str) -> Tuple[str, Optional[Dict[str, Any]]]:
-        """Extended parse with backup/restore/transaction commands."""
-        # Check for simple commands first
-        cmd_upper = command.strip().upper()
-        
-        if cmd_upper == 'BEGIN':
-            return 'BEGIN', {}
-        if cmd_upper == 'COMMIT':
-            return 'COMMIT', {}
-        if cmd_upper == 'ROLLBACK':
-            return 'ROLLBACK', {}
-        if cmd_upper == 'DIST_TX_LIST':
-            return 'DIST_TX_LIST', {}
-        if cmd_upper == 'FAILOVER STATUS':
-            return 'FAILOVER_STATUS', {}
-        if cmd_upper == 'METRICS':
-            return 'METRICS', {}
-        if cmd_upper == 'HEALTH':
-            return 'HEALTH', {}
-        if cmd_upper == 'PROMETHEUS':
-            return 'PROMETHEUS', {}
-        
-        # Let the parent parser handle core SQL-like commands with full
-        # parameter processing (columns, values, WHERE, SET, ORDER BY).
-        parent_result = super().parse(command)
-        if parent_result[0] != 'UNKNOWN':
-            return parent_result
-        
-        # Extended patterns (backup/restore/distributed tx/failover/monitoring)
-        for cmd_type, pattern in self.patterns.items():
-            match = pattern.match(command)
-            if match:
-                params = match.groupdict()
-                return cmd_type, params
-        
-        return 'UNKNOWN', None
+        # Additional patterns are already included in base parser

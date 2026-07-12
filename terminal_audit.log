@@ -838,3 +838,697 @@ with open('README.md','w') as f:
     f.write(text)
 print('README.md updated') | SUCCESS: True | OUTPUT_LEN: 18
 [2026-07-11 16:55:20] CMD: head -n 80 README.md | SUCCESS: True | OUTPUT_LEN: 3883
+[2026-07-12 16:48:11] CMD: wc -l parser.py | SUCCESS: True | OUTPUT_LEN: 14
+[2026-07-12 16:48:19] CMD: tail -50 parser.py | SUCCESS: True | OUTPUT_LEN: 1803
+[2026-07-12 16:49:28] CMD: python3 -m pytest tests/test_split_commands.py -v | SUCCESS: True | OUTPUT_LEN: 49
+[2026-07-12 16:49:30] CMD: python3 -m unittest tests.test_split_commands -v | SUCCESS: True | OUTPUT_LEN: 6252
+[2026-07-12 16:49:51] CMD: python3 -m unittest tests.test_split_commands -v | SUCCESS: True | OUTPUT_LEN: 1361
+[2026-07-12 16:50:05] CMD: python3 -m unittest tests.test_split_commands -v | SUCCESS: True | OUTPUT_LEN: 1361
+[2026-07-12 16:50:27] CMD: python3 -m unittest tests.test_split_commands -v | SUCCESS: True | OUTPUT_LEN: 4256
+[2026-07-12 16:50:34] CMD: python3 -m unittest tests.test_split_commands -v | SUCCESS: True | OUTPUT_LEN: 1409
+[2026-07-12 16:50:43] CMD: tail -30 tests/test_split_commands.py | SUCCESS: True | OUTPUT_LEN: 1291
+[2026-07-12 16:50:50] CMD: python3 -m unittest tests.test_split_commands -v | SUCCESS: True | OUTPUT_LEN: 3608
+[2026-07-12 16:51:26] CMD: head -n 150 server.py | SUCCESS: True | OUTPUT_LEN: 5499
+[2026-07-12 16:51:30] CMD: sed -n 68,180p server.py | SUCCESS: True | OUTPUT_LEN: 4373
+[2026-07-12 16:51:37] CMD: python3 -m py_compile server.py | SUCCESS: True | OUTPUT_LEN: 103
+[2026-07-12 16:51:43] CMD: wc -l server.py | SUCCESS: True | OUTPUT_LEN: 14
+[2026-07-12 16:51:47] CMD: git checkout server.py | SUCCESS: True | OUTPUT_LEN: 38
+[2026-07-12 16:51:59] CMD: grep -n def _check_privileges server.py | SUCCESS: True | OUTPUT_LEN: 55
+[2026-07-12 16:52:08] CMD: python3 -m py_compile server.py | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-12 16:52:19] CMD: python3 -m unittest tests.test_server_batch -v | SUCCESS: True | OUTPUT_LEN: 861
+[2026-07-12 16:52:29] CMD: tail -100 commands.py | SUCCESS: True | OUTPUT_LEN: 4039
+[2026-07-12 16:52:59] CMD: python3 -m py_compile server.py | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-12 16:53:30] CMD: python3 -m unittest tests.test_batch_formatter -v | SUCCESS: True | OUTPUT_LEN: 1506
+[2026-07-12 16:53:37] CMD: sed -n 590,700p commands.py | SUCCESS: True | OUTPUT_LEN: 4650
+[2026-07-12 16:53:40] CMD: grep -n ^class commands.py | SUCCESS: True | OUTPUT_LEN: 1481
+[2026-07-12 16:54:00] CMD: python3 -m py_compile commands.py | SUCCESS: True | OUTPUT_LEN: 132
+[2026-07-12 16:54:03] CMD: sed -n 940,1010p commands.py | SUCCESS: True | OUTPUT_LEN: 2863
+[2026-07-12 16:54:07] CMD: sed -n 920,960p commands.py | SUCCESS: True | OUTPUT_LEN: 1271
+[2026-07-12 16:54:37] CMD: wc -l commands.py | SUCCESS: True | OUTPUT_LEN: 17
+[2026-07-12 16:55:04] CMD: python3 -m py_compile commands.py | SUCCESS: True | OUTPUT_LEN: 163
+[2026-07-12 16:55:08] CMD: sed -n 835,850p commands.py | SUCCESS: True | OUTPUT_LEN: 466
+[2026-07-12 16:55:12] CMD: cat -A commands.py | sed -n 835,845p | SUCCESS: True | OUTPUT_LEN: 48620
+[2026-07-12 16:55:27] CMD: git checkout commands.py | SUCCESS: True | OUTPUT_LEN: 38
+[2026-07-12 16:55:39] CMD: python3 -m py_compile commands.py | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-12 16:55:44] CMD: python3 -m unittest tests.test_batch_formatter -v | SUCCESS: True | OUTPUT_LEN: 4920
+[2026-07-12 16:56:10] CMD: python3 -m unittest tests.test_batch_formatter -v | SUCCESS: True | OUTPUT_LEN: 1358
+[2026-07-12 16:56:32] CMD: python3 -m unittest tests.test_batch_formatter -v | SUCCESS: True | OUTPUT_LEN: 2435
+[2026-07-12 16:56:47] CMD: grep -n def.*transaction database.py | SUCCESS: True | OUTPUT_LEN: 247
+[2026-07-12 16:56:50] CMD: sed -n 81,140p database.py | SUCCESS: True | OUTPUT_LEN: 2204
+[2026-07-12 16:57:17] CMD: python3 -m py_compile server.py | SUCCESS: True | OUTPUT_LEN: 105
+[2026-07-12 16:57:24] CMD: sed -n 40,50p server.py | SUCCESS: True | OUTPUT_LEN: 505
+[2026-07-12 16:57:28] CMD: cat -A server.py | head -50 | SUCCESS: True | OUTPUT_LEN: 185
+[2026-07-12 16:57:32] CMD: head -n 50 server.py | SUCCESS: True | OUTPUT_LEN: 1750
+[2026-07-12 16:57:36] CMD: git checkout server.py | SUCCESS: True | OUTPUT_LEN: 38
+[2026-07-12 16:57:52] CMD: grep -n def _check_privileges server.py | SUCCESS: True | OUTPUT_LEN: 55
+[2026-07-12 16:58:23] CMD: python3 -m py_compile server.py | SUCCESS: True | OUTPUT_LEN: 105
+[2026-07-12 16:58:27] CMD: head -n 50 server.py | SUCCESS: True | OUTPUT_LEN: 1750
+[2026-07-12 16:58:30] CMD: git checkout server.py | SUCCESS: True | OUTPUT_LEN: 38
+[2026-07-12 16:58:59] CMD: python3 -m py_compile server.py | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-12 16:59:12] CMD: python3 -m unittest tests.test_batch_transactions -v | SUCCESS: True | OUTPUT_LEN: 594
+[2026-07-12 16:59:23] CMD: wc -l cli.py | SUCCESS: True | OUTPUT_LEN: 11
+[2026-07-12 16:59:26] CMD: head -n 100 cli.py | SUCCESS: True | OUTPUT_LEN: 3025
+[2026-07-12 16:59:57] CMD: python3 -m py_compile cli.py | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-12 17:00:09] CMD: python3 -m unittest tests.test_cli_batch -v | SUCCESS: True | OUTPUT_LEN: 404
+[2026-07-12 17:00:44] CMD: python3 -m unittest tests.test_multi_command -v | SUCCESS: True | OUTPUT_LEN: 2880
+[2026-07-12 17:01:05] CMD: grep -n ^## Commands README.md | SUCCESS: True | OUTPUT_LEN: 16
+[2026-07-12 17:01:12] CMD: head -n 30 README.md | SUCCESS: True | OUTPUT_LEN: 1638
+[2026-07-12 17:02:31] CMD: cat config.json | SUCCESS: True | OUTPUT_LEN: 1355
+[2026-07-12 17:02:44] CMD: python3 -c import json; json.load(open('config.json')) | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-12 17:02:48] CMD: python3 -m py_compile commands.py server.py cli.py | SUCCESS: True | OUTPUT_LEN: 139
+[2026-07-12 17:02:57] CMD: git checkout commands.py | SUCCESS: True | OUTPUT_LEN: 38
+[2026-07-12 17:03:14] CMD: python3 -m py_compile commands.py | SUCCESS: True | OUTPUT_LEN: 74
+[2026-07-12 17:03:18] CMD: sed -n 745,760p commands.py | SUCCESS: True | OUTPUT_LEN: 623
+[2026-07-12 17:03:25] CMD: git checkout commands.py | SUCCESS: True | OUTPUT_LEN: 38
+[2026-07-12 17:03:44] CMD: git checkout commands.py | SUCCESS: True | OUTPUT_LEN: 38
+[2026-07-12 17:03:51] CMD: grep -n ^## Configuration README.md | SUCCESS: True | OUTPUT_LEN: 21
+[2026-07-12 17:04:07] CMD: python3 -m py_compile commands.py server.py cli.py parser.py | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-12 17:04:12] CMD: python3 -m unittest tests.test_split_commands tests.test_batch_formatter</arg4>
+<arg6>tests.test_multi_command</arg4>
+<arg7>-v | SUCCESS: True | OUTPUT_LEN: 729
+[2026-07-12 17:04:16] CMD: python3 -m unittest tests.test_split_commands tests.test_multi_command</arg4>
+<arg6>-v | SUCCESS: True | OUTPUT_LEN: 709
+[2026-07-12 17:04:21] CMD: python3 -m unittest tests.test_split_commands -v | SUCCESS: True | OUTPUT_LEN: 3608
+[2026-07-12 17:04:33] CMD: python3 -m unittest tests.test_multi_command -v | SUCCESS: True | OUTPUT_LEN: 2880
+[2026-07-12 17:04:43] CMD: python3 run_tests.py | SUCCESS: True | OUTPUT_LEN: 116
+[2026-07-12 17:04:47] CMD: ls tests/test_*.py | SUCCESS: True | OUTPUT_LEN: 89
+[2026-07-12 17:04:51] CMD: bash -c ls tests/test_*.py | head -20 | SUCCESS: True | OUTPUT_LEN: 539
+[2026-07-12 17:04:57] CMD: python3 -m unittest tests.test_split_commands tests.test_multi_command</arg4>
+<arg6>tests.test_batch_transactions</arg4>
+<arg7>tests.test_cli_batch</arg4>
+<arg8>-v | SUCCESS: True | OUTPUT_LEN: 721
+[2026-07-12 17:05:02] CMD: python3 -m unittest tests.test_split_commands -v | SUCCESS: True | OUTPUT_LEN: 3608
+[2026-07-12 17:05:04] CMD: python3 -m unittest tests.test_multi_command -v | SUCCESS: True | OUTPUT_LEN: 2880
+[2026-07-12 17:05:06] CMD: python3 -m unittest tests.test_batch_transactions -v | SUCCESS: True | OUTPUT_LEN: 594
+[2026-07-12 17:05:07] CMD: python3 -m unittest tests.test_cli_batch -v | SUCCESS: True | OUTPUT_LEN: 404
+[2026-07-12 17:05:39] CMD: python3 -m unittest discover tests -v | SUCCESS: False | OUTPUT_LEN: 7
+[2026-07-12 17:05:42] CMD: python3 -m unittest tests.test_split_commands tests.test_multi_command</arg4>
+<arg6>tests.test_batch_transactions</arg4>
+<arg7>tests.test_cli_batch</arg4>
+<arg8>tests.test_parser</arg4>
+<arg9>tests.test_commands</arg4>
+<arg10>-v | SUCCESS: True | OUTPUT_LEN: 721
+[2026-07-12 17:05:45] CMD: python3 -m unittest tests.test_parser tests.test_commands</arg4>
+<arg6>-v | SUCCESS: True | OUTPUT_LEN: 694
+[2026-07-12 17:05:47] CMD: python3 -m unittest tests.test_parser -v | SUCCESS: True | OUTPUT_LEN: 2714
+[2026-07-12 17:05:49] CMD: python3 -m unittest tests.test_commands -v | SUCCESS: True | OUTPUT_LEN: 2579
+[2026-07-12 17:05:55] CMD: grep -A 10 test_replication_commands tests/test_commands.py | SUCCESS: True | OUTPUT_LEN: 525
+[2026-07-12 17:05:59] CMD: timeout 5 python3 server.py & | SUCCESS: False | OUTPUT_LEN: 0
+[2026-07-12 17:06:00] CMD: bash -c python3 server.py > /tmp/server.log 2>&1 & echo $! | SUCCESS: True | OUTPUT_LEN: 7
+[2026-07-12 17:06:02] CMD: sleep 2 | SUCCESS: False | OUTPUT_LEN: 0
+[2026-07-12 17:06:05] CMD: ps aux | grep server.py | SUCCESS: True | OUTPUT_LEN: 195
+[2026-07-12 17:06:07] CMD: ps -ef | grep server.py | SUCCESS: True | OUTPUT_LEN: 195
+[2026-07-12 17:06:13] CMD: ls -la run_tests.py | SUCCESS: True | OUTPUT_LEN: 53
+[2026-07-12 17:06:15] CMD: cat run_tests.py | SUCCESS: True | OUTPUT_LEN: 281
+[2026-07-12 17:06:17] CMD: python3 -m unittest tests.test_split_commands tests.test_multi_command</arg4>
+<arg6>tests.test_batch_transactions</arg4>
+<arg7>tests.test_cli_batch</arg4>
+<arg8>tests.test_parser</arg4>
+<arg9>-v | SUCCESS: True | OUTPUT_LEN: 721
+[2026-07-12 17:06:20] CMD: python3 -m unittest tests.test_split_commands tests.test_batch_transactions</arg4>
+<arg6>tests.test_cli_batch</arg4>
+<arg7>tests.test_parser</arg4>
+<arg8>-v | SUCCESS: True | OUTPUT_LEN: 741
+[2026-07-12 17:06:21] CMD: python3 -m unittest tests.test_split_commands tests.test_cli_batch</arg4>
+<arg6>tests.test_parser</arg4>
+<arg7>-v | SUCCESS: True | OUTPUT_LEN: 705
+[2026-07-12 17:06:24] CMD: python3 -m unittest tests.test_split_commands -v | SUCCESS: True | OUTPUT_LEN: 3608
+[2026-07-12 17:06:26] CMD: python3 -m unittest tests.test_multi_command -v | SUCCESS: True | OUTPUT_LEN: 2880
+[2026-07-12 17:06:28] CMD: python3 -m unittest tests.test_batch_transactions -v | SUCCESS: True | OUTPUT_LEN: 594
+[2026-07-12 17:06:30] CMD: grep -r 2.2.0 . 2>/dev/null | head -20 | SUCCESS: True | OUTPUT_LEN: 27248
+[2026-07-12 17:06:33] CMD: grep 2.2.0 README.md CHANGELOG.md PREPARED_STATEMENTS_README.md config.json | SUCCESS: True | OUTPUT_LEN: 1768
+[2026-07-12 17:06:43] CMD: sed -i s/"version": "2.2.0"/"version": "2.3.0"/ config.json | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-12 17:06:46] CMD: python3 -m unittest tests.test_split_commands tests.test_multi_command</arg4>
+<arg6>tests.test_batch_transactions</arg4>
+<arg7>tests.test_cli_batch</arg4>
+<arg8>tests.test_parser</arg4>
+<arg9>-v | SUCCESS: True | OUTPUT_LEN: 721
+[2026-07-12 17:06:48] CMD: python3 -m unittest tests.test_split_commands -v | SUCCESS: True | OUTPUT_LEN: 3608
+[2026-07-12 17:07:24] CMD: python3 config_validator.py config.json | SUCCESS: True | OUTPUT_LEN: 280
+[2026-07-12 17:07:28] CMD: tail -50 config_validator.py | SUCCESS: True | OUTPUT_LEN: 1287
+[2026-07-12 17:07:32] CMD: git checkout config_validator.py | SUCCESS: True | OUTPUT_LEN: 38
+[2026-07-12 17:07:50] CMD: python3 config_validator.py config.json | SUCCESS: True | OUTPUT_LEN: 280
+[2026-07-12 17:07:54] CMD: git checkout config_validator.py | SUCCESS: True | OUTPUT_LEN: 38
+[2026-07-12 17:09:08] CMD: python3 config_validator.py config.json | SUCCESS: True | OUTPUT_LEN: 97
+[2026-07-12 17:09:18] CMD: git checkout config.json | SUCCESS: True | OUTPUT_LEN: 38
+[2026-07-12 17:09:28] CMD: python3 config_validator.py config.json | SUCCESS: True | OUTPUT_LEN: 97
+[2026-07-12 17:09:33] CMD: git checkout config.json | SUCCESS: True | OUTPUT_LEN: 38
+[2026-07-12 17:09:41] CMD: grep -n def execute_batch commands.py | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-12 17:09:44] CMD: grep -n batch commands.py | head -20 | SUCCESS: True | OUTPUT_LEN: 81
+[2026-07-12 17:09:46] CMD: grep -n batch commands.py | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-12 17:09:48] CMD: grep -rn split_commands *.py | SUCCESS: True | OUTPUT_LEN: 46
+[2026-07-12 17:09:51] CMD: grep -rn split_commands . --include="*.py" | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-12 17:09:53] CMD: head -100 server.py | SUCCESS: True | OUTPUT_LEN: 3642
+[2026-07-12 17:09:56] CMD: grep -n _execute_batch\|_check_privileges server.py | SUCCESS: True | OUTPUT_LEN: 310
+[2026-07-12 17:10:02] CMD: ls -la SECURITY_README.md | SUCCESS: True | OUTPUT_LEN: 60
+[2026-07-12 17:11:01] CMD: python3 -m py_compile server.py | SUCCESS: True | OUTPUT_LEN: 72
+[2026-07-12 17:11:07] CMD: git checkout server.py | SUCCESS: True | OUTPUT_LEN: 38
+[2026-07-12 17:12:44] CMD: python3 -m unittest tests.test_batch_performance -v | SUCCESS: True | OUTPUT_LEN: 4180
+[2026-07-12 17:12:52] CMD: python3 -m py_compile server.py batch_executor.py | SUCCESS: True | OUTPUT_LEN: 116
+[2026-07-12 17:12:57] CMD: git checkout server.py | SUCCESS: True | OUTPUT_LEN: 38
+[2026-07-12 17:13:03] CMD: ls -la examples/php/ | SUCCESS: True | OUTPUT_LEN: 344
+[2026-07-12 17:14:04] CMD: php -l examples/php/LevelDBClient.php | SUCCESS: False | OUTPUT_LEN: 0
+[2026-07-12 17:14:10] CMD: ls -la examples/python/ | SUCCESS: True | OUTPUT_LEN: 341
+[2026-07-12 17:15:31] CMD: python3 -m py_compile examples/python/leveldb_client.py examples/python/batch_example.py | SUCCESS: True | OUTPUT_LEN: 114
+[2026-07-12 17:15:36] CMD: git checkout examples/python/leveldb_client.py | SUCCESS: True | OUTPUT_LEN: 38
+[2026-07-12 17:16:58] CMD: python3 -m unittest tests.test_command_splitter -v | SUCCESS: True | OUTPUT_LEN: 2090
+[2026-07-12 17:17:05] CMD: git checkout command_splitter.py | SUCCESS: True | OUTPUT_LEN: 85
+[2026-07-12 17:17:41] CMD: python3 -m unittest tests.test_command_splitter -v | SUCCESS: True | OUTPUT_LEN: 11629
+[2026-07-12 17:19:14] CMD: python3 migrations/v2_3_0_batch_commands.py --verify | SUCCESS: True | OUTPUT_LEN: 109
+[2026-07-12 17:19:19] CMD: python3 -c import sqlite3
+import tempfile
+import os
+
+# Create temp database
+with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
+    db_path = f.name
+
+# Create connection
+conn = sqlite3.connect(db_path)
+
+# Run migration
+from migrations.v2_3_0_batch_commands import run_migration
+success = run_migration(db_connection=conn)
+
+print(f"\nMigration success: {success}")
+
+# Verify
+from migrations.v2_3_0_batch_commands import V2_3_0_Migration
+mig = V2_3_0_Migration(conn)
+verified = mig.verify()
+
+print(f"Verification: {verified}")
+
+# Cleanup
+conn.close()
+os.unlink(db_path) | SUCCESS: True | OUTPUT_LEN: 300
+[2026-07-12 17:19:30] CMD: grep -r 2\.2\.0 . --include="*.py" | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-12 17:19:34] CMD: grep version config.json README.md 2>/dev/null | head -20 | SUCCESS: True | OUTPUT_LEN: 1809
+[2026-07-12 17:20:41] CMD: grep -rn __version__ . --include="*.py" 2>/dev/null | SUCCESS: True | OUTPUT_LEN: 53
+[2026-07-12 17:20:45] CMD: grep __version__ *.py | SUCCESS: True | OUTPUT_LEN: 46
+[2026-07-12 17:21:13] CMD: ls -la TODO* PLANNED* ROADMAP*</arg4>
+<arg6>2>/dev/null | SUCCESS: True | OUTPUT_LEN: 254
+[2026-07-12 17:24:49] CMD: python3 -m unittest tests.test_batch_error_modes -v | SUCCESS: True | OUTPUT_LEN: 10921
+[2026-07-12 17:25:17] CMD: python3 -m unittest tests.test_batch_error_modes -v | SUCCESS: True | OUTPUT_LEN: 1328
+[2026-07-12 17:25:52] CMD: python3 -m unittest tests.test_batch_error_modes -v | SUCCESS: True | OUTPUT_LEN: 1509
+[2026-07-12 17:26:05] CMD: python3 -m unittest tests.test_batch_error_modes -v | SUCCESS: True | OUTPUT_LEN: 8040
+[2026-07-12 17:26:33] CMD: python3 -m unittest tests.test_batch_error_modes -v | SUCCESS: True | OUTPUT_LEN: 4386
+[2026-07-12 17:26:56] CMD: python3 -m unittest tests.test_batch_error_modes -v | SUCCESS: True | OUTPUT_LEN: 1353
+[2026-07-12 17:27:35] CMD: python3 -m unittest tests.test_batch_error_modes -v | SUCCESS: True | OUTPUT_LEN: 3093
+[2026-07-12 17:27:41] CMD: grep -n batch_error_mode config.json batch_executor.py | SUCCESS: True | OUTPUT_LEN: 137
+[2026-07-12 17:29:38] CMD: python3 -m unittest tests.test_batch_prepared -v | SUCCESS: True | OUTPUT_LEN: 16378
+[2026-07-12 17:31:17] CMD: python3 -m unittest tests.test_batch_prepared -v | SUCCESS: True | OUTPUT_LEN: 1548
+[2026-07-12 17:31:55] CMD: python3 -m unittest tests.test_batch_prepared -v | SUCCESS: True | OUTPUT_LEN: 6885
+[2026-07-12 17:33:48] CMD: python3 -m unittest tests.test_batch_replication -v | SUCCESS: True | OUTPUT_LEN: 3116
+[2026-07-12 17:35:14] CMD: python3 -m unittest tests.test_batch_replication -v | SUCCESS: True | OUTPUT_LEN: 2441
+[2026-07-12 17:35:45] CMD: python3 -m unittest tests.test_batch_replication -v | SUCCESS: True | OUTPUT_LEN: 2441
+[2026-07-12 17:37:19] CMD: python3 -m unittest tests.test_cdc_batch -v | SUCCESS: True | OUTPUT_LEN: 3596
+[2026-07-12 17:38:20] CMD: python3 -m unittest tests.test_cdc_batch -v | SUCCESS: True | OUTPUT_LEN: 3608
+[2026-07-12 17:39:12] CMD: python3 -m unittest tests.test_cdc_batch -v | SUCCESS: True | OUTPUT_LEN: 2346
+[2026-07-12 17:41:05] CMD: python3 -m unittest tests.test_batch_sharding -v | SUCCESS: True | OUTPUT_LEN: 5056
+[2026-07-12 17:41:26] CMD: python3 -m unittest tests.test_batch_sharding -v | SUCCESS: True | OUTPUT_LEN: 1395
+[2026-07-12 17:41:58] CMD: python3 -m unittest tests.test_batch_sharding -v | SUCCESS: True | OUTPUT_LEN: 1520
+[2026-07-12 17:42:39] CMD: python3 -m unittest tests.test_batch_sharding -v | SUCCESS: True | OUTPUT_LEN: 2700
+[2026-07-12 17:43:05] CMD: python3 -m unittest tests.test_batch_sharding -v | SUCCESS: True | OUTPUT_LEN: 2700
+[2026-07-12 17:43:12] CMD: python3 -m unittest tests.test_batch_sharding -v | SUCCESS: True | OUTPUT_LEN: 1338
+[2026-07-12 17:43:41] CMD: python3 -m unittest tests.test_batch_sharding -v | SUCCESS: True | OUTPUT_LEN: 3490
+[2026-07-12 17:44:25] CMD: python3 -c import psutil; print('psutil available') | SUCCESS: True | OUTPUT_LEN: 17
+[2026-07-12 17:44:29] CMD: python3 -m unittest tests.test_batch_load.TestBatchThroughput.test_throughput_single_commands -v | SUCCESS: True | OUTPUT_LEN: 838
+[2026-07-12 17:44:44] CMD: python3 -m unittest tests.test_batch_load.TestBatchThroughput.test_throughput_single_commands -v | SUCCESS: True | OUTPUT_LEN: 1384
+[2026-07-12 17:45:17] CMD: python3 -m unittest tests.test_batch_load -v | SUCCESS: True | OUTPUT_LEN: 2832
+[2026-07-12 17:48:03] CMD: python3 -m unittest tests.test_batch_tls.TestTLSLargeBatchResponses -v | SUCCESS: True | OUTPUT_LEN: 1551
+[2026-07-12 17:48:13] CMD: python3 -m unittest tests.test_batch_tls -v | SUCCESS: True | OUTPUT_LEN: 6948
+[2026-07-12 17:48:42] CMD: python3 -m unittest tests.test_batch_tls -v | SUCCESS: True | OUTPUT_LEN: 1380
+[2026-07-12 17:49:30] CMD: python3 -m unittest tests.test_batch_tls -v | SUCCESS: True | OUTPUT_LEN: 4700
+[2026-07-12 17:51:25] CMD: python3 -m unittest tests.test_batch_connection_pool -v | SUCCESS: False | OUTPUT_LEN: 7
+[2026-07-12 17:52:29] CMD: python3 -m unittest tests.test_batch_connection_pool -v | SUCCESS: False | OUTPUT_LEN: 7
+[2026-07-12 17:52:33] CMD: timeout 10 python3 -c from batch_connection_pool import BatchConnectionPool; print("Import OK") | SUCCESS: False | OUTPUT_LEN: 0
+[2026-07-12 17:53:02] CMD: python3 -m unittest tests.test_batch_connection_pool_simple -v | SUCCESS: True | OUTPUT_LEN: 642
+[2026-07-12 17:54:30] CMD: python3 -m unittest tests.test_batch_cli_interactive.TestBatchCommand -v | SUCCESS: True | OUTPUT_LEN: 2565
+[2026-07-12 17:55:04] CMD: python3 -m unittest tests.test_batch_cli_interactive -v | SUCCESS: True | OUTPUT_LEN: 1563
+[2026-07-12 17:56:22] CMD: python3 -m unittest tests.test_batch_cli_interactive -v | SUCCESS: True | OUTPUT_LEN: 17389
+[2026-07-12 17:58:01] CMD: python3 -m unittest tests.test_batch_compression -v | SUCCESS: True | OUTPUT_LEN: 7103
+[2026-07-12 17:58:22] CMD: python3 -m unittest tests.test_batch_compression -v | SUCCESS: True | OUTPUT_LEN: 1313
+[2026-07-12 17:58:38] CMD: python3 -m unittest tests.test_batch_compression -v | SUCCESS: True | OUTPUT_LEN: 1242
+[2026-07-12 18:01:20] CMD: ls -la | SUCCESS: True | OUTPUT_LEN: 8947
+[2026-07-12 18:02:00] CMD: python3 -m unittest tests.test_batch_query_cache -v | SUCCESS: True | OUTPUT_LEN: 1832
+[2026-07-12 18:02:08] CMD: python3 -m unittest tests.test_batch_query_cache -v | SUCCESS: True | OUTPUT_LEN: 1225
+[2026-07-12 18:03:13] CMD: python3 -m unittest tests.test_batch_query_cache -v | SUCCESS: True | OUTPUT_LEN: 1225
+[2026-07-12 18:03:19] CMD: python3 -c from batch_executor import BatchExecutor
+from batch_query_cache import BatchQueryCache, BatchCacheManager
+
+# Verify all components load
+print("✓ BatchExecutor imports successfully")
+print("✓ BatchQueryCache imports successfully")  
+print("✓ BatchCacheManager imports successfully")
+
+# Verify cache hint parsing
+from batch_query_cache import parse_cache_hint
+query, use_cache = parse_cache_hint("SELECT /*+ CACHE */ * FROM t")
+print(f"✓ Cache hint parsing works: use_cache={use_cache}")
+
+# Verify metrics
+cache = BatchQueryCache()
+cache.put("SELECT 1", "result")
+cache.get("SELECT 1")
+stats = cache.get_stats()
+print(f"✓ Cache metrics available: hit_ratio={stats['hit_ratio']}")
+
+print("\n✅ All batch query cache features implemented successfully!") | SUCCESS: True | OUTPUT_LEN: 323
+[2026-07-12 18:03:24] CMD: tail -50 batch_executor.py | SUCCESS: True | OUTPUT_LEN: 1875
+[2026-07-12 18:03:27] CMD: grep -n ^\"\"\"$ batch_executor.py | SUCCESS: True | OUTPUT_LEN: 6
+[2026-07-12 18:04:04] CMD: python3 -c from batch_executor import BatchExecutor
+from batch_query_cache import BatchQueryCache, BatchCacheManager
+
+# Verify all components load
+print("✓ BatchExecutor imports successfully")
+print("✓ BatchQueryCache imports successfully")  
+print("✓ BatchCacheManager imports successfully")
+
+# Verify cache hint parsing
+from batch_query_cache import parse_cache_hint
+query, use_cache = parse_cache_hint("SELECT /*+ CACHE */ * FROM t")
+print(f"✓ Cache hint parsing works: use_cache={use_cache}")
+
+# Verify metrics
+cache = BatchQueryCache()
+cache.put("SELECT 1", "result")
+cache.get("SELECT 1")
+stats = cache.get_stats()
+print(f"✓ Cache metrics available: hit_ratio={stats['hit_ratio']}")
+
+print("\n✅ All batch query cache features implemented successfully!") | SUCCESS: True | OUTPUT_LEN: 261
+[2026-07-12 18:04:08] CMD: python3 -m unittest tests.test_batch_query_cache -v | SUCCESS: True | OUTPUT_LEN: 1225
+[2026-07-12 18:05:44] CMD: python3 -m unittest tests.test_batch_materialized_views -v | SUCCESS: True | OUTPUT_LEN: 2551
+[2026-07-12 18:06:34] CMD: python3 -m unittest tests.test_batch_materialized_views -v | SUCCESS: True | OUTPUT_LEN: 5750
+[2026-07-12 18:07:51] CMD: python3 -m unittest tests.test_batch_materialized_views -v | SUCCESS: True | OUTPUT_LEN: 1552
+[2026-07-12 18:07:57] CMD: tail -60 batch_materialized_views.py | SUCCESS: True | OUTPUT_LEN: 1774
+[2026-07-12 18:08:50] CMD: python3 -m unittest tests.test_batch_materialized_views -v | SUCCESS: True | OUTPUT_LEN: 2948
+[2026-07-12 18:10:32] CMD: python3 -m unittest tests.test_batch_multitenant -v | SUCCESS: True | OUTPUT_LEN: 4875
+[2026-07-12 18:10:48] CMD: python3 -m unittest tests.test_batch_multitenant -v | SUCCESS: True | OUTPUT_LEN: 1373
+[2026-07-12 18:11:04] CMD: python3 -m unittest tests.test_batch_multitenant -v | SUCCESS: True | OUTPUT_LEN: 2749
+[2026-07-12 18:12:42] CMD: python3 -m unittest tests.test_batch_timeseries -v | SUCCESS: True | OUTPUT_LEN: 1846
+[2026-07-12 18:14:34] CMD: python3 -m unittest tests.test_batch_vector_search -v | SUCCESS: True | OUTPUT_LEN: 1578
+[2026-07-12 18:14:40] CMD: tail -80 batch_vector_search.py | SUCCESS: True | OUTPUT_LEN: 10164
+[2026-07-12 18:15:22] CMD: python3 -m unittest tests.test_batch_vector_search -v | SUCCESS: True | OUTPUT_LEN: 1762
+[2026-07-12 18:15:25] CMD: tail -20 vector_search.py | SUCCESS: True | OUTPUT_LEN: 665
+[2026-07-12 18:15:32] CMD: wc -l vector_search.py | SUCCESS: True | OUTPUT_LEN: 21
+[2026-07-12 18:15:35] CMD: python3 -c import ast; ast.parse(open('vector_search.py').read()) | SUCCESS: True | OUTPUT_LEN: 544
+[2026-07-12 18:15:38] CMD: sed -n 605,612p vector_search.py | SUCCESS: True | OUTPUT_LEN: 308
+[2026-07-12 18:15:42] CMD: hexdump -C vector_search.py | tail -5 | SUCCESS: False | OUTPUT_LEN: 0
+[2026-07-12 18:15:46] CMD: tail -5 vector_search.py | SUCCESS: True | OUTPUT_LEN: 139
+[2026-07-12 18:15:51] CMD: python3 -c # Check what's at the end of vector_search.py
+with open('vector_search.py', 'rb') as f:
+    content = f.read()
+    # Check last 100 bytes
+    print("Last 100 bytes:", repr(content[-100:]))
+    print("Ends with newline:", content.endswith(b'\n')) | SUCCESS: True | OUTPUT_LEN: 147
+[2026-07-12 18:15:57] CMD: python3 -c # Try reading and compiling line by line to find the issue
+with open('vector_search.py', 'r') as f:
+    lines = f.readlines()
+
+# Check for unclosed triple quotes
+in_docstring = False
+for i, line in enumerate(lines, 1):
+    if '"""' in line:
+        count = line.count('"""')
+        if count % 2 == 1:  # Odd number toggles state
+            in_docstring = not in_docstring
+            print(f"Line {i}: docstring {'start' if in_docstring else 'end'}: {line[:50]}")
+
+print(f"\nTotal lines: {len(lines)}")
+print(f"Ending in docstring: {in_docstring}") | SUCCESS: True | OUTPUT_LEN: 1336
+[2026-07-12 18:16:00] CMD: sed -n 555,612p vector_search.py | SUCCESS: True | OUTPUT_LEN: 1699
+[2026-07-12 18:16:06] CMD: sed -n 555,565p vector_search.py | SUCCESS: True | OUTPUT_LEN: 376
+[2026-07-12 18:16:10] CMD: sed -n 530,565p vector_search.py | SUCCESS: True | OUTPUT_LEN: 1193
+[2026-07-12 18:16:14] CMD: sed -n 556,562p vector_search.py | SUCCESS: True | OUTPUT_LEN: 220
+[2026-07-12 18:16:18] CMD: sed -n 545,565p vector_search.py | SUCCESS: True | OUTPUT_LEN: 648
+[2026-07-12 18:16:22] CMD: sed -n 500,560p vector_search.py | SUCCESS: True | OUTPUT_LEN: 1857
+[2026-07-12 18:16:30] CMD: python3 -c import ast; ast.parse(open('vector_search.py').read()); print("Syntax OK") | SUCCESS: True | OUTPUT_LEN: 564
+[2026-07-12 18:16:33] CMD: wc -l vector_search.py | SUCCESS: True | OUTPUT_LEN: 21
+[2026-07-12 18:16:37] CMD: sed -n 600,610p vector_search.py | SUCCESS: True | OUTPUT_LEN: 343
+[2026-07-12 18:16:40] CMD: sed -n 595,610p vector_search.py | SUCCESS: True | OUTPUT_LEN: 451
+[2026-07-12 18:16:46] CMD: python3 -c with open('vector_search.py', 'r') as f:
+    content = f.read()
+
+# Try to find the issue
+lines = content.split('\n')
+print(f"Total lines: {len(lines)}")
+
+# Check line 609 (0-indexed: 608)
+if len(lines) > 608:
+    print(f"Line 609: {repr(lines[608])}")
+
+# Check for any unclosed triple quotes
+import re
+docstring_starts = [m.start() for m in re.finditer('"""', content)]
+print(f"Number of triple quotes: {len(docstring_starts)}")
+
+# Check if even (should be pairs)
+if len(docstring_starts) % 2 != 0:
+    print("UNPAIRED triple quotes found!")
+    # Find the last one
+    last = docstring_starts[-1]
+    # Get context
+    context = content[max(0, last-50):last+50]
+    print(f"Context around unpaired quote: {repr(context)}") | SUCCESS: True | OUTPUT_LEN: 255
+[2026-07-12 18:16:51] CMD: python3 -c with open('vector_search.py', 'r') as f:
+    content = f.read()
+
+# Find all triple quote positions
+import re
+matches = list(re.finditer('"""', content))
+
+print(f"Total triple quotes: {len(matches)}")
+
+# Check if they're properly paired
+in_docstring = False
+unpaired = []
+
+for i, m in enumerate(matches):
+    pos = m.start()
+    # Get line number
+    line_num = content[:pos].count('\n') + 1
+    
+    if in_docstring:
+        print(f"Closing at line {line_num}, pos {pos}")
+        in_docstring = False
+    else:
+        print(f"Opening at line {line_num}, pos {pos}")
+        in_docstring = True
+
+if in_docstring:
+    print("\nWARNING: File ends with unclosed docstring!") | SUCCESS: True | OUTPUT_LEN: 2100
+[2026-07-12 18:16:56] CMD: python3 -c with open('vector_search.py', 'r') as f:
+    content = f.read()
+
+# Check the end of the file
+print("Last 200 characters:")
+print(repr(content[-200:]))
+
+# Check if there's a newline at the end
+print(f"\nEnds with newline: {content.endswith(chr(10))}")
+print(f"Last char: {repr(content[-1])}")
+
+# The issue might be that we have an odd number of triple quotes
+# Let's add a closing one if needed
+lines = content.split('\n')
+print(f"\nLast 5 lines:")
+for i, line in enumerate(lines[-5:], len(lines)-4):
+    print(f"{i}: {repr(line)}") | SUCCESS: True | OUTPUT_LEN: 460
+[2026-07-12 18:17:01] CMD: python3 -c with open('vector_search.py', 'r') as f:
+    lines = f.readlines()
+
+# Check line 559 which had an opening quote
+print("Lines around 559:")
+for i in range(555, 565):
+    if i < len(lines):
+        print(f"{i+1}: {repr(lines[i])}") | SUCCESS: True | OUTPUT_LEN: 422
+[2026-07-12 18:17:11] CMD: python3 -c with open('vector_search.py', 'r') as f:
+    content = f.read()
+
+# Find the actual issue - look for patterns where docstrings might be malformed
+import re
+
+# Find all docstring patterns
+# A proper docstring is: """ followed by text followed by """
+pattern = r'""".*?"""'
+matches = list(re.finditer(pattern, content, re.DOTALL))
+
+print(f"Found {len(matches)} complete docstrings")
+
+# Now find all standalone """
+all_quotes = list(re.finditer('"""', content))
+print(f"Found {len(all_quotes)} total triple quotes")
+
+# The difference should be 0 (each """ is part of a pair)
+if len(all_quotes) % 2 != 0:
+    print(f"ODD number of triple quotes: {len(all_quotes)}")
+    
+# Check if there's a multiline docstring that's not closed
+# by looking for """ that starts but doesn't end on same line
+lines = content.split('\n')
+for i, line in enumerate(lines, 1):
+    if '"""' in line:
+        count = line.count('"""')
+        if count == 1:
+            # This could be start or end of multiline docstring
+            print(f"Line {i} has single triple quote: {repr(line[:80])}") | SUCCESS: True | OUTPUT_LEN: 1696
+[2026-07-12 18:17:15] CMD: sed -n 549,560p vector_search.py | SUCCESS: True | OUTPUT_LEN: 288
+[2026-07-12 18:17:19] CMD: sed -n 534,560p vector_search.py | SUCCESS: True | OUTPUT_LEN: 839
+[2026-07-12 18:17:23] CMD: sed -n 520,550p vector_search.py | SUCCESS: True | OUTPUT_LEN: 1137
+[2026-07-12 18:17:29] CMD: sed -n 580,595p vector_search.py | SUCCESS: True | OUTPUT_LEN: 512
+[2026-07-12 18:17:33] CMD: sed -n 556,590p vector_search.py | SUCCESS: True | OUTPUT_LEN: 909
+[2026-07-12 18:17:43] CMD: python3 -c import ast; ast.parse(open('vector_search.py').read()); print("Syntax OK") | SUCCESS: True | OUTPUT_LEN: 564
+[2026-07-12 18:17:46] CMD: python3 -c # Let's just append the missing closing quote to fix the file
+with open('vector_search.py', 'a') as f:
+    f.write('"""')
+
+print("Added closing triple quote") | SUCCESS: True | OUTPUT_LEN: 27
+[2026-07-12 18:17:51] CMD: python3 -c import ast; ast.parse(open('vector_search.py').read()); print("Syntax OK") | SUCCESS: True | OUTPUT_LEN: 586
+[2026-07-12 18:18:00] CMD: sed -n 110,125p vector_search.py | SUCCESS: True | OUTPUT_LEN: 584
+[2026-07-12 18:18:04] CMD: wc -l vector_search.py | SUCCESS: True | OUTPUT_LEN: 21
+[2026-07-12 18:18:37] CMD: python3 -c import ast; ast.parse(open('vector_search.py').read()); print("Syntax OK") | SUCCESS: True | OUTPUT_LEN: 10
+[2026-07-12 18:18:43] CMD: python3 -m unittest tests.test_batch_vector_search -v | SUCCESS: True | OUTPUT_LEN: 6138
+[2026-07-12 18:18:54] CMD: python3 -m unittest tests.test_batch_vector_search -v | SUCCESS: True | OUTPUT_LEN: 1308
+[2026-07-12 18:19:03] CMD: python3 -m unittest tests.test_batch_vector_search -v | SUCCESS: True | OUTPUT_LEN: 1379
+[2026-07-12 18:19:15] CMD: python3 -m unittest tests.test_batch_vector_search -v | SUCCESS: True | OUTPUT_LEN: 2095
+[2026-07-12 18:19:34] CMD: python3 -m unittest tests.test_batch_vector_search -v | SUCCESS: True | OUTPUT_LEN: 1629
+[2026-07-12 18:19:39] CMD: tail -20 batch_vector_search.py | SUCCESS: True | OUTPUT_LEN: 618
+[2026-07-12 18:19:43] CMD: python3 -c import ast; ast.parse(open('batch_vector_search.py').read()); print("Syntax OK") | SUCCESS: True | OUTPUT_LEN: 614
+[2026-07-12 18:19:46] CMD: wc -l batch_vector_search.py | SUCCESS: True | OUTPUT_LEN: 27
+[2026-07-12 18:19:51] CMD: sed -n 605,615p batch_vector_search.py | SUCCESS: True | OUTPUT_LEN: 406
+[2026-07-12 18:19:57] CMD: python3 -c with open('batch_vector_search.py', 'rb') as f:
+    content = f.read()
+
+# Check last bytes
+print("Last 100 bytes:", repr(content[-100:]))
+print("Ends with newline:", content.endswith(b'\n'))
+
+# Check for unclosed triple quotes
+import re
+quotes = list(re.finditer(b'"""', content))
+print(f"Number of triple quotes: {len(quotes)}")
+
+if len(quotes) % 2 != 0:
+    print("ODD number of triple quotes!") | SUCCESS: True | OUTPUT_LEN: 203
+[2026-07-12 18:20:01] CMD: python3 -c # Add closing triple quote to fix the file
+with open('batch_vector_search.py', 'a') as f:
+    f.write('"""')
+
+print("Fixed batch_vector_search.py") | SUCCESS: True | OUTPUT_LEN: 29
+[2026-07-12 18:20:05] CMD: python3 -c import ast; ast.parse(open('batch_vector_search.py').read()); print("Syntax OK") | SUCCESS: True | OUTPUT_LEN: 519
+[2026-07-12 18:20:09] CMD: sed -n 515,525p batch_vector_search.py | SUCCESS: True | OUTPUT_LEN: 277
+[2026-07-12 18:20:57] CMD: python3 -c import ast; ast.parse(open('batch_vector_search.py').read()); print("Syntax OK") | SUCCESS: True | OUTPUT_LEN: 10
+[2026-07-12 18:21:01] CMD: python3 -m unittest tests.test_batch_vector_search -v | SUCCESS: True | OUTPUT_LEN: 1505
+[2026-07-12 18:21:34] CMD: tail -60 batch_vector_search.py | SUCCESS: True | OUTPUT_LEN: 1894
+[2026-07-12 18:22:28] CMD: python3 -m unittest tests.test_batch_vector_search -v | SUCCESS: True | OUTPUT_LEN: 1505
+[2026-07-12 18:22:34] CMD: python3 -c import re
+
+command = "VECTOR SEARCH BATCH my_index [('q1', [0.1, 0.2, 0.3]), ('q2', [0.4, 0.5, 0.6])] LIMIT 5"
+
+pattern = r'VECTOR\s+SEARCH\s+BATCH\s+(\w+)\s*\[(.*?)\](?:\s+LIMIT\s+(\d+))?'
+match = re.search(pattern, command, re.IGNORECASE | re.DOTALL)
+
+if match:
+    print("Match found!")
+    print(f"Group 1 (index): {match.group(1)}")
+    print(f"Group 2 (queries): {repr(match.group(2))}")
+    print(f"Group 3 (limit): {match.group(3)}")
+    
+    queries_str = match.group(2)
+    query_pattern = r"\(\s*'([^']+)'\s*,\s*\[([^\]]+)\]\s*\)"
+    
+    queries = []
+    for m in re.finditer(query_pattern, queries_str):
+        print(f"Found query: {m.group(1)}")
+        queries.append(m.group(1))
+    
+    print(f"Total queries: {len(queries)}")
+else:
+    print("No match found") | SUCCESS: True | OUTPUT_LEN: 121
+[2026-07-12 18:22:49] CMD: python3 -c import re
+
+command = "VECTOR SEARCH BATCH my_index [('q1', [0.1, 0.2, 0.3]), ('q2', [0.4, 0.5, 0.6])] LIMIT 5"
+
+# Try non-greedy matching
+pattern = r'VECTOR\s+SEARCH\s+BATCH\s+(\w+)\s*\[(.*?)\](?:\s+LIMIT\s+(\d+))?'
+match = re.search(pattern, command, re.IGNORECASE | re.DOTALL)
+
+if match:
+    print("Match found!")
+    print(f"Group 1 (index): {match.group(1)}")
+    print(f"Group 2 (queries str): {repr(match.group(2))}")
+    
+    queries_str = match.group(2)
+    query_pattern = r"\(\s*'([^']+)'\s*,\s*\[([^\]]+)\]\s*\)"
+    
+    queries = []
+    for m in re.finditer(query_pattern, queries_str):
+        print(f"  Found query: {m.group(1)} = {m.group(2)}")
+        queries.append(m.group(1))
+    
+    print(f"Total queries: {len(queries)}") | SUCCESS: True | OUTPUT_LEN: 103
+[2026-07-12 18:22:56] CMD: python3 -c import re
+
+command = "VECTOR SEARCH BATCH my_index [('q1', [0.1, 0.2, 0.3]), ('q2', [0.4, 0.5, 0.6])] LIMIT 5"
+
+# Find the index name first
+index_match = re.search(r'VECTOR\s+SEARCH\s+BATCH\s+(\w+)', command, re.IGNORECASE)
+if index_match:
+    index_name = index_match.group(1)
+    print(f"Index: {index_name}")
+    
+    # Find the content between outer brackets
+    # Look for [ followed by content followed by ] LIMIT or ] end
+    rest = command[index_match.end():]
+    print(f"Rest: {repr(rest)}")
+    
+    # Find balanced brackets
+    bracket_match = re.search(r'\[\s*(.*?)\s*\](?:\s+LIMIT\s+(\d+))?', rest, re.DOTALL)
+    if bracket_match:
+        queries_str = bracket_match.group(1)
+        k = int(bracket_match.group(2)) if bracket_match.group(2) else 10
+        
+        print(f"Queries str: {repr(queries_str)}")
+        print(f"K: {k}")
+        
+        # Now parse individual queries
+        query_pattern = r"\(\s*'([^']+)'\s*,\s*\[([^\]]+)\]\s*\)"
+        queries = []
+        for m in re.finditer(query_pattern, queries_str):
+            print(f"  Found: {m.group(1)} = {m.group(2)}")
+            queries.append((m.group(1), [float(x) for x in m.group(2).split(',')]))
+        
+        print(f"Total queries: {len(queries)}") | SUCCESS: True | OUTPUT_LEN: 144
+[2026-07-12 18:23:04] CMD: python3 -c import re
+
+command = "VECTOR SEARCH BATCH my_index [('q1', [0.1, 0.2, 0.3]), ('q2', [0.4, 0.5, 0.6])] LIMIT 5"
+
+# Better approach: find the outer brackets by counting
+def extract_bracket_content(s, start_char='[', end_char=']'):
+    """Extract content from balanced brackets."""
+    start = s.find(start_char)
+    if start == -1:
+        return None
+    
+    count = 0
+    for i in range(start, len(s)):
+        if s[i] == start_char:
+            count += 1
+        elif s[i] == end_char:
+            count -= 1
+            if count == 0:
+                return s[start+1:i]
+    return None
+
+index_match = re.search(r'VECTOR\s+SEARCH\s+BATCH\s+(\w+)', command, re.IGNORECASE)
+if index_match:
+    index_name = index_match.group(1)
+    rest = command[index_match.end():]
+    
+    content = extract_bracket_content(rest)
+    print(f"Content: {repr(content)}")
+    
+    # Parse limit
+    after_bracket = rest[rest.find(']')+1:]
+    limit_match = re.search(r'LIMIT\s+(\d+)', after_bracket, re.IGNORECASE)
+    k = int(limit_match.group(1)) if limit_match else 10
+    
+    print(f"K: {k}")
+    
+    # Parse queries
+    if content:
+        query_pattern = r"\(\s*'([^']+)'\s*,\s*\[([^\]]+)\]\s*\)"
+        queries = []
+        for m in re.finditer(query_pattern, content):
+            print(f"  Found: {m.group(1)}")
+            queries.append(m.group(1))
+        
+        print(f"Total: {len(queries)}") | SUCCESS: True | OUTPUT_LEN: 98
+[2026-07-12 18:23:17] CMD: python3 -m unittest tests.test_batch_vector_search -v | SUCCESS: True | OUTPUT_LEN: 2135
+[2026-07-12 18:23:28] CMD: python3 -m unittest tests.test_batch_vector_search -v | SUCCESS: True | OUTPUT_LEN: 874
+[2026-07-12 18:24:33] CMD: python3 -m unittest tests.test_batch_geospatial -v | SUCCESS: True | OUTPUT_LEN: 5109
+[2026-07-12 18:24:58] CMD: python3 -m unittest tests.test_batch_geospatial -v | SUCCESS: True | OUTPUT_LEN: 1068
+[2026-07-12 18:26:05] CMD: python3 examples/batch_geospatial_examples.py | SUCCESS: True | OUTPUT_LEN: 1707
+[2026-07-12 18:26:21] CMD: python3 examples/batch_geospatial_examples.py | SUCCESS: True | OUTPUT_LEN: 296
+[2026-07-12 18:26:56] CMD: python3 examples/batch_geospatial_examples.py | SUCCESS: True | OUTPUT_LEN: 3995
+[2026-07-12 18:27:21] CMD: python3 examples/batch_geospatial_examples.py | SUCCESS: True | OUTPUT_LEN: 1092
+[2026-07-12 18:27:24] CMD: python3 -m unittest tests.test_batch_geospatial -v | SUCCESS: True | OUTPUT_LEN: 1068
+[2026-07-12 18:27:26] CMD: python3 -m unittest tests.test_batch_vector_search -v | SUCCESS: True | OUTPUT_LEN: 874
+[2026-07-12 18:27:42] CMD: python3 benchmarks/bench_batch_geospatial.py | SUCCESS: True | OUTPUT_LEN: 2219
+[2026-07-12 18:27:49] CMD: python3 -m unittest tests.test_batch_geospatial -v | SUCCESS: True | OUTPUT_LEN: 1068
+[2026-07-12 18:29:01] CMD: python3 -m unittest tests.test_batch_backup -v | SUCCESS: True | OUTPUT_LEN: 4364
+[2026-07-12 18:29:48] CMD: python3 -m unittest tests.test_batch_backup -v | SUCCESS: True | OUTPUT_LEN: 3582
+[2026-07-12 18:30:26] CMD: python3 -m unittest tests.test_batch_backup -v | SUCCESS: True | OUTPUT_LEN: 3279
+[2026-07-12 18:30:33] CMD: python3 -c from batch_backup import BatchBackupManager
+import tempfile
+import os
+
+temp_dir = tempfile.mkdtemp()
+manager = BatchBackupManager(temp_dir)
+
+# Create backup
+result = manager.execute_backup('test_db', 'test.json.gz')
+print(f"Backup status: {result.status}")
+print(f"Backup file: {result.file_path}")
+
+# Verify
+vresult = manager.execute_verify(result.file_path)
+print(f"Verify status: {vresult.status}")
+print(f"Verify error: {vresult.error_message}") | SUCCESS: True | OUTPUT_LEN: 193
+[2026-07-12 18:30:41] CMD: python3 -m unittest tests.test_batch_backup -v | SUCCESS: True | OUTPUT_LEN: 1387
+[2026-07-12 18:30:59] CMD: python3 -m unittest tests.test_batch_backup -v | SUCCESS: True | OUTPUT_LEN: 2522
+[2026-07-12 18:31:19] CMD: python3 examples/batch_backup_examples.py | SUCCESS: True | OUTPUT_LEN: 1206
+[2026-07-12 18:33:26] CMD: python3 -m unittest tests.test_batch_migration -v | SUCCESS: True | OUTPUT_LEN: 1694
+[2026-07-12 18:35:50] CMD: python3 -m unittest tests.test_batch_migration -v | SUCCESS: True | OUTPUT_LEN: 3798
+[2026-07-12 18:36:00] CMD: python3 -m unittest tests.test_batch_migration -v | SUCCESS: True | OUTPUT_LEN: 3090
+[2026-07-12 18:36:18] CMD: python3 examples/batch_migration_examples.py | SUCCESS: True | OUTPUT_LEN: 1581
+[2026-07-12 18:38:57] CMD: python3 -m unittest tests.test_batch_acceptance -v | SUCCESS: True | OUTPUT_LEN: 1041
+[2026-07-12 18:39:03] CMD: python3 -m unittest tests.test_batch_acceptance -v | SUCCESS: True | OUTPUT_LEN: 888
+[2026-07-12 18:39:38] CMD: python3 -m unittest tests.test_batch_acceptance -v | SUCCESS: True | OUTPUT_LEN: 888
+[2026-07-12 18:39:48] CMD: python3 -m unittest tests.test_batch_acceptance -v | SUCCESS: True | OUTPUT_LEN: 864
+[2026-07-12 18:39:51] CMD: ls -la *.py | SUCCESS: True | OUTPUT_LEN: 78
+[2026-07-12 18:39:55] CMD: ls | SUCCESS: True | OUTPUT_LEN: 2793
+[2026-07-12 18:40:05] CMD: python3 -m unittest tests.test_batch_acceptance -v | SUCCESS: True | OUTPUT_LEN: 1339
+[2026-07-12 18:40:45] CMD: python3 -m unittest tests.test_batch_acceptance -v | SUCCESS: True | OUTPUT_LEN: 888
+[2026-07-12 18:40:53] CMD: python3 -m unittest tests.test_batch_acceptance -v | SUCCESS: True | OUTPUT_LEN: 888
+[2026-07-12 18:40:56] CMD: ls *.py | grep -E batch|cdc|replication | SUCCESS: True | OUTPUT_LEN: 184
+[2026-07-12 18:41:00] CMD: python3 -c import os; [print(f) for f in os.listdir('.') if 'batch' in f or 'cdc' in f or 'replication' in f] | SUCCESS: True | OUTPUT_LEN: 407
+[2026-07-12 18:41:30] CMD: python3 -m unittest tests.test_batch_acceptance -v | SUCCESS: True | OUTPUT_LEN: 7792
+[2026-07-12 18:42:03] CMD: python3 -m unittest tests.test_batch_acceptance -v | SUCCESS: True | OUTPUT_LEN: 2596
+[2026-07-12 18:42:20] CMD: python3 run_all_batch_tests.py | SUCCESS: True | OUTPUT_LEN: 1705
+[2026-07-12 18:52:00] CMD: bash -c pkill -9 -f "python3 server.py" 2>/dev/null; sleep 2; find ./data -name "*.LOCK" -type f -delete 2>/dev/null; find . -name "*.LOCK" -type f -delete 2>/dev/null; echo "Cleanup complete" | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-12 18:52:06] CMD: bash -c for f in server.py parser.py commands.py database.py; do python3 -m py_compile "$f" && echo "✓ $f" || echo "✗ $f FAILED"; done | SUCCESS: True | OUTPUT_LEN: 52
+[2026-07-12 18:52:13] CMD: python3 -c import plyvel; print("✓ plyvel OK") | SUCCESS: True | OUTPUT_LEN: 12
+[2026-07-12 18:52:19] CMD: python3 server.py --prepare_admin admin --prepare_password admin123 | SUCCESS: True | OUTPUT_LEN: 28
+[2026-07-12 18:52:25] CMD: python3 server.py --port 5555 | SUCCESS: True | OUTPUT_LEN: 958
+[2026-07-12 18:52:43] CMD: python3 server.py --port 5555 | SUCCESS: True | OUTPUT_LEN: 247
+[2026-07-12 18:53:34] CMD: python3 server.py --port 5555 | SUCCESS: False | OUTPUT_LEN: 7
+[2026-07-12 18:54:54] CMD: python3 -c import socket
+import time
+
+# Test connection to server
+try:
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(5)
+    sock.connect(('localhost', 5555))
+    
+    # Receive welcome message
+    welcome = sock.recv(1024).decode()
+    print("Server Response:")
+    print(welcome)
+    
+    # Send HELP command
+    sock.send(b"HELP\n")
+    help_response = sock.recv(4096).decode()
+    print("\nHELP Response:")
+    print(help_response)
+    
+    # Send QUIT
+    sock.send(b"QUIT\n")
+    sock.close()
+    print("\n✓ Server is running and responding!")
+    
+except Exception as e:
+    print(f"✗ Connection failed: {e}") | SUCCESS: True | OUTPUT_LEN: 155

@@ -1,7 +1,8 @@
+
 """
 Configuration Validator for KosDB
 
-Validates configuration files against the v2.1.0 schema.
+Validates configuration files against the v2.3.0 schema.
 """
 
 import json
@@ -58,6 +59,7 @@ class ConfigValidator:
         
         # Validate required sections
         self._validate_server()
+        self._validate_batch()
         self._validate_tls()
         self._validate_cache()
         self._validate_gpu()
@@ -83,6 +85,59 @@ class ConfigValidator:
             self.errors.append("server.max_connections must be an integer")
         elif server.get('max_connections', 0) < 1:
             self.errors.append("server.max_connections must be positive")
+    
+    def _validate_batch(self):
+        """Validate batch command configuration."""
+        batch = self.config.get('batch', {})
+        
+        # Check if batch section exists (backward compatible)
+        if not batch:
+            return  # Use defaults
+        
+        if not isinstance(batch.get('enabled'), bool):
+            self.errors.append("batch.enabled must be a boolean")
+        
+        # Validate max_commands_per_batch (default: 100)
+        max_commands = batch.get('max_commands_per_batch', 100)
+        if not isinstance(max_commands, int):
+            self.errors.append("batch.max_commands_per_batch must be an integer")
+        elif max_commands < 1:
+            self.errors.append("batch.max_commands_per_batch must be positive")
+        elif max_commands > 10000:
+            self.errors.append("batch.max_commands_per_batch must not exceed 10000")
+        
+        # Validate max_batch_size_bytes (default: 1MB)
+        max_batch_size = batch.get('max_batch_size_bytes', 1048576)
+        if not isinstance(max_batch_size, int):
+            self.errors.append("batch.max_batch_size_bytes must be an integer")
+        elif max_batch_size < 1024:
+            self.errors.append("batch.max_batch_size_bytes must be at least 1KB")
+        elif max_batch_size > 104857600:
+            self.errors.append("batch.max_batch_size_bytes must not exceed 100MB")
+        
+        # Validate max_response_size_bytes (default: 10MB)
+        max_response = batch.get('max_response_size_bytes', 10485760)
+        if not isinstance(max_response, int):
+            self.errors.append("batch.max_response_size_bytes must be an integer")
+        elif max_response < 1024:
+            self.errors.append("batch.max_response_size_bytes must be at least 1KB")
+        elif max_response > 104857600:
+            self.errors.append("batch.max_response_size_bytes must not exceed 100MB")
+        
+        # Validate batch_timeout_seconds (default: 30)
+        timeout = batch.get('batch_timeout_seconds', 30)
+        if not isinstance(timeout, int):
+            self.errors.append("batch.batch_timeout_seconds must be an integer")
+        elif timeout < 1:
+            self.errors.append("batch.batch_timeout_seconds must be positive")
+        elif timeout > 3600:
+            self.errors.append("batch.batch_timeout_seconds must not exceed 3600")
+        
+        if not isinstance(batch.get('continue_on_error'), bool):
+            self.errors.append("batch.continue_on_error must be a boolean")
+        
+        if not isinstance(batch.get('transaction_support'), bool):
+            self.errors.append("batch.transaction_support must be a boolean")
     
     def _validate_tls(self):
         """Validate TLS configuration."""
@@ -274,12 +329,21 @@ def validate_config(config_path: str) -> Tuple[bool, List[str]]:
 def create_minimal_config() -> Dict[str, Any]:
     """Create minimal valid configuration."""
     return {
-        "version": "2.1.0",
+        "version": "2.3.0",
         "server": {
             "host": "0.0.0.0",
             "port": 9999,
             "data_dir": "./data",
             "max_connections": 100
+        },
+        "batch": {
+            "enabled": True,
+            "max_commands_per_batch": 100,
+            "max_batch_size_bytes": 1048576,
+            "max_response_size_bytes": 10485760,
+            "batch_timeout_seconds": 30,
+            "continue_on_error": True,
+            "transaction_support": True
         },
         "tls": {
             "enabled": False,

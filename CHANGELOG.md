@@ -5,6 +5,48 @@ All notable changes to the KosDB project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-01-15
+
+### Summary
+KosDB v2.3.0 introduces multi-command batch execution, allowing multiple SQL commands to be sent and executed in a single network request. This major feature significantly improves performance for bulk operations while maintaining full ACID compliance and security.
+
+- **Batch Command Support** - Execute multiple SQL commands in a single request
+  - Semicolon (`;`) separator for command chaining
+  - Smart parsing: semicolons inside quoted strings don't split
+  - Per-command result tracking with success/failure status
+  - Batch summary showing total commands, successes, and failures
+  - Transaction support: BEGIN; ... COMMIT/ROLLBACK patterns
+  - Error handling: continue on error or stop options
+  - Support for escaped characters and Unicode in commands
+
+### Added - CLI Batch Mode
+- **Batch File Execution** (`cli.py -b file.sql`) - Execute SQL scripts from files
+  - Interactive batch builder mode (`\batch` command)
+  - Multi-line command input support
+  - Formatted batch result display with color coding
+  - Backward compatible with single-command usage
+
+### Added - Batch Response Formatter
+- **Structured Batch Output** (`commands.py` `BatchResponseFormatter`)
+  - Command numbering: `[1/5]`, `[2/5]`, etc.
+  - Status indicators: OK, ERROR, BYE
+  - Result truncation for large outputs
+  - Summary statistics at batch completion
+
+### Technical Improvements
+- **Parser Enhancement** (`parser.py` `split_commands()`)
+  - State machine-based command splitting
+  - Handles single quotes, double quotes, and escape sequences
+  - Filters empty commands and extra whitespace
+  - Performance optimized for large batches (100+ commands)
+
+### Testing
+- **Comprehensive Test Suite** (`tests/test_multi_command.py`)
+  - 21 test cases covering splitting, transactions, edge cases
+  - Performance tests for large batches
+  - Unicode and special character handling
+
+## [2.2.0] - 2026-01-09
 ## [2.0.0] - 2026-01-09
 
 ### Added - Agent Communication Protocol

@@ -1,6 +1,7 @@
+
 # Security Features for KosDB
 
-Comprehensive security system with audit logging, encryption, RBAC, SQL injection detection, and compliance reporting.
+Comprehensive security system with audit logging, encryption, RBAC, SQL injection detection, batch command security, and compliance reporting.
 
 ## Features
 
@@ -9,8 +10,8 @@ Comprehensive security system with audit logging, encryption, RBAC, SQL injectio
 - **Column-Level Encryption**: Per-column encryption for sensitive data
 - **RBAC**: Role-based access control with hierarchical roles
 - **SQL Injection Detection**: Pattern analysis and query validation
+- **Batch Command Security**: Privilege checks, rate limiting, and audit logging for multi-command batches
 - **Security Policies**: Password, session, and encryption policies
-- **Compliance Reporting**: GDPR, SOX, PCI DSS reports
 
 ## Audit Event Types
 
@@ -24,15 +25,45 @@ Comprehensive security system with audit logging, encryption, RBAC, SQL injectio
 | ENCRYPTION/DECRYPTION | Encryption operations |
 | POLICY_VIOLATION | Security violations |
 
-## SQL Commands
+## Batch Command Security
 
-### Audit Log
-```sql
-AUDIT LOG
-AUDIT LOG USER username
-AUDIT LOG TYPE query RISK 50
-EXPORT AUDIT LOG FORMAT json
+KosDB v2.3.0 introduces comprehensive security measures for multi-command batch execution:
+
+### Security Features
+
+1. **Individual Privilege Checks**: Each command in a batch is checked for required permissions
+2. **SQL Injection Detection**: Every command is analyzed for injection patterns
+3. **Rate Limiting**: Batches count as N commands toward rate limits
+4. **Batch Size Limits**: Configurable maximum commands per batch and batch size
+5. **Audit Logging**: Complete batch execution is logged with results
+6. **Security Policy Control**: `allow_batch_commands` setting to disable feature
+
+### Configuration
+
+```json
+{
+  "batch": {
+    "enabled": true,
+    "max_commands_per_batch": 100,
+    "max_batch_size_bytes": 1048576,
+    "max_response_size_bytes": 10485760,
+    "batch_timeout_seconds": 30,
+    "continue_on_error": true,
+    "transaction_support": true
+  },
+  "security": {
+    "allow_batch_commands": true,
+    "sql_injection_detection": true
+  }
+}
 ```
+
+### Security Behavior
+
+- **Unauthorized Commands**: If a command in the middle of a batch lacks permissions, it's skipped with an error, and remaining commands continue (if `continue_on_error` is true)
+- **Injection Detection**: If any command triggers injection detection, the entire batch is rejected
+- **Rate Limiting**: Each command in a batch counts against the rate limit
+- **Audit Trail**: Batch executions are logged with command count, success/error counts, and user information
 
 ### Role Management
 ```sql

@@ -1,7 +1,9 @@
+
 """
 Monitoring and Metrics System for LevelDB Socket Server
 
 Provides performance metrics, health checks, and monitoring endpoints.
+Includes multi-command batch execution metrics (v2.3.0).
 """
 
 import time
@@ -13,6 +15,15 @@ from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum
 import psutil
+import os
+
+
+class MetricType(Enum):
+    """Types of metrics."""
+    COUNTER = "counter"
+    GAUGE = "gauge"
+    HISTOGRAM = "histogram"
+    TIMER = "timer"
 import os
 
 from commands import Command

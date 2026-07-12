@@ -1,0 +1,1 @@
+{"version": "1.0", "checksum": "b90ccdd5cd79b7631245b355044c6798067cb85d8f1f1f1041d73cd1cd01e8f6", "timestamp": 1783875932.8822942, "data": {"session_id": "user4", "username": "user4", "current_db": null, "is_admin": false, "privileges": {}, "created_at": 1783875932.8818595, "last_activity": 1783875932.8818595, "client_address": null, "custom_state": {}}, "format": "json"}
