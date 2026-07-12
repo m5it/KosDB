@@ -15,9 +15,8 @@ setup(
     name="kosdb",
     version="2.0.0",
     author="Development Team",
-    author_email="w4d4f4k@gmail.com",
-    description="A high-performance distributed database system with vector search and schema migrations",
-    long_description=long_description,
+
+    version="2.3.0",
     long_description_content_type="text/markdown",
     url="https://github.com/m5it/KosDB",
     packages=find_packages(),

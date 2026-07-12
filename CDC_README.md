@@ -1,285 +1,508 @@
-# Change Data Capture (CDC) for KosDB
 
-Stream database changes to external systems with multiple output formats and configurable filtering.
+# Change Data Capture (CDC) with Batch Support
 
-## Features
+KosDB v2.3.0 introduces comprehensive Change Data Capture (CDC) with full support for batch operations. This document describes the CDC architecture, batch handling, and consumer APIs.
 
-- **Ordered Event Log**: Global sequence numbers for event ordering
-- **Multiple Formats**: JSON, Avro, Protobuf encoding
-- **Configurable Consumers**: Filter by table and operation type
-- **Kafka Integration**: Stream events to Kafka topics
-- **Snapshot Support**: Initialize consumers with current state
+## Overview
+
+CDC captures all database changes and streams them to external systems with:
+- **Individual Events**: Each database change is captured as a separate event
+- **Batch Correlation**: Batch operations include metadata for grouping
+- **Multiple Formats**: JSON, Avro, and Protobuf output formats
+- **Rate Limiting**: Protection against overwhelming consumers
+- **Kafka Integration**: Native Kafka producer support
+
+## Architecture
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   KosDB     │────▶│  CDC Log    │────▶│  Consumers  │
+│  (Database) │     │             │     │             │
+└─────────────┘     └─────────────┘     └─────────────┘
+                                              │
+                                              ▼
+                                        ┌─────────────┐
+                                        │   Kafka     │
+                                        │  (Optional) │
+                                        └─────────────┘
+```
 
 ## Event Types
 
+### Standard Operations
+
 | Operation | Description |
 |-----------|-------------|
-| INSERT | New row inserted |
-| UPDATE | Row updated |
-| DELETE | Row deleted |
-| BEGIN | Transaction started |
-| COMMIT | Transaction committed |
-| ROLLBACK | Transaction rolled back |
+| `INSERT` | New row inserted |
+| `UPDATE` | Existing row modified |
+| `DELETE` | Row deleted |
+| `BEGIN` | Transaction started |
+| `COMMIT` | Transaction committed |
+| `ROLLBACK` | Transaction rolled back |
+
+### Batch Markers
+
+| Marker | Description |
+|--------|-------------|
+| `BATCH_START` | Beginning of batch operation |
+| `BATCH_END` | Completion of batch operation |
+| `BATCH_COMMAND` | Individual command within batch |
+
+## Batch CDC Events
+
+### Single Event (Non-Batch)
+
+```json
+{
+  "sequence_number": 100,
+  "timestamp": 1705312800123456,
+  "timestamp_iso": "2024-01-15T10:00:00.123456",
+  "operation": "INSERT",
+  "table": "users",
+  "key": 1,
+  "before": null,
+  "after": {
+    "id": 1,
+    "name": "Alice",
+    "email": "alice@example.com"
+  },
+  "transaction_id": null,
+  "lsn": null,
+  "batch_id": null,
+  "batch_sequence": null,
+  "batch_total": null,
+  "batch_error_mode": null
+}
+```
+
+### Batch Start Marker
+
+```json
+{
+  "sequence_number": 101,
+  "timestamp": 1705312800123457,
+  "operation": "BATCH_START",
+  "table": "",
+  "key": null,
+  "batch_id": "batch_001",
+  "batch_sequence": 0,
+  "batch_total": 3,
+  "batch_error_mode": "continue"
+}
+```
+
+### Batch Command Event
+
+```json
+{
+  "sequence_number": 102,
+  "timestamp": 1705312800123458,
+  "operation": "INSERT",
+  "table": "users",
+  "key": 1,
+  "after": {
+    "id": 1,
+    "name": "Alice"
+  },
+  "batch_id": "batch_001",
+  "batch_sequence": 1,
+  "batch_total": 3,
+  "batch_error_mode": "continue"
+}
+```
+
+### Batch End Marker
+
+```json
+{
+  "sequence_number": 104,
+  "timestamp": 1705312800123460,
+  "operation": "BATCH_END",
+  "table": "",
+  "key": null,
+  "batch_id": "batch_001",
+  "batch_sequence": 0,
+  "batch_total": 3,
+  "batch_error_mode": null
+}
+```
+
+## Batch Correlation
+
+All events from the same batch share the same `batch_id`:
+
+```python
+# Batch execution generates events with shared batch_id
+batch_id = "batch_001"
+
+# Events:
+# 1. BATCH_START (batch_id="batch_001")
+# 2. INSERT (batch_id="batch_001", batch_sequence=1)
+# 3. INSERT (batch_id="batch_001", batch_sequence=2)
+# 4. INSERT (batch_id="batch_001", batch_sequence=3)
+# 5. BATCH_END (batch_id="batch_001")
+```
+
+## Consumer API
+
+### Basic Consumer
+
+```python
+from cdc_batch import BatchCDCManager, BatchCDCEventType
+
+# Get CDC manager
+manager = get_batch_cdc_manager()
+
+# Create consumer
+consumer = manager.create_consumer(
+    consumer_id="my_consumer",
+    tables={"users", "orders"},
+    operations={BatchCDCEventType.INSERT, BatchCDCEventType.UPDATE},
+    format=OutputFormat.JSON,
+    group_batches=False  # Individual events
+)
+
+# Start consuming
+def on_event(event_bytes):
+    event = json.loads(event_bytes)
+    print(f"Received: {event['operation']} on {event['table']}")
+
+consumer.start(callback=on_event)
+```
+
+### Batch Grouping Consumer
+
+```python
+# Create consumer with batch grouping
+consumer = manager.create_consumer(
+    consumer_id="batch_consumer",
+    group_batches=True  # Group events by batch
+)
+
+def on_individual_event(event_bytes):
+    # Called for every event (including markers)
+    event = json.loads(event_bytes)
+    print(f"Event: {event['operation']}")
+
+def on_complete_batch(batch_id, events):
+    # Called when BATCH_END is received
+    # events: list of all batch command events
+    print(f"Complete batch {batch_id}: {len(events)} events")
+    for event_bytes in events:
+        event = json.loads(event_bytes)
+        process_event(event)
+
+consumer.start(
+    callback=on_individual_event,
+    batch_callback=on_complete_batch
+)
+```
+
+## Rate Limiting
+
+Protect consumers from being overwhelmed by large batches:
+
+```python
+from cdc_batch import BatchCDCManager
+
+# Create manager with rate limiting
+manager = BatchCDCManager(
+    rate_limit=True,
+    max_events_per_second=10000.0,
+    burst_size=100
+)
+
+# Events will be throttled if they exceed the rate limit
+```
+
+### Rate Limiter Configuration
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `max_events_per_second` | 10000.0 | Maximum sustained rate |
+| `burst_size` | 100 | Maximum burst allowed |
+
+## Kafka Integration
+
+### Setup
+
+```python
+from cdc_batch import BatchCDCManager
+
+manager = BatchCDCManager()
+
+# Configure Kafka
+manager.setup_kafka(
+    bootstrap_servers="localhost:9092",
+    topic_prefix="kosdb.cdc"
+)
+```
+
+### Topic Naming
+
+| Event Type | Topic Pattern | Example |
+|------------|---------------|---------|
+| Single Event | `{prefix}.{table}` | `kosdb.cdc.users` |
+| Batch Event | `{prefix}.batch.{table}` | `kosdb.cdc.batch.users` |
+| Batch Complete | `{prefix}.batch.complete.{table}` | `kosdb.cdc.batch.complete.users` |
+
+### Kafka Headers
+
+Batch events include headers for correlation:
+
+```python
+headers = [
+    ('batch_id', 'batch_001'),
+    ('batch_seq', '1'),
+    ('batch_total', '3')
+]
+```
+
+## Filtering
+
+### Table Filtering
+
+```python
+consumer = manager.create_consumer(
+    consumer_id="filtered",
+    tables={"users", "accounts"}  # Only these tables
+)
+```
+
+### Operation Filtering
+
+```python
+consumer = manager.create_consumer(
+    consumer_id="inserts_only",
+    operations={BatchCDCEventType.INSERT}  # Only INSERTs
+)
+```
+
+### Batch Event Filtering
+
+```python
+# Include batch markers
+consumer = manager.create_consumer(
+    consumer_id="with_markers",
+    operations={
+        BatchCDCEventType.INSERT,
+        BatchCDCEventType.BATCH_START,
+        BatchCDCEventType.BATCH_END
+    }
+)
+```
 
 ## Output Formats
 
-| Format | Description |
-|--------|-------------|
-| JSON | Human-readable JSON |
-| Avro | Binary Avro with schema |
-| Protobuf | Protocol Buffers binary |
+### JSON (Default)
 
-## SQL Commands
-
-### Start CDC Consumer
-```sql
-CDC START CONSUMER consumer1 TABLES users,orders OPS INSERT,UPDATE FORMAT json
-CDC START CONSUMER consumer2 FROM_LATEST
+```json
+{
+  "sequence_number": 102,
+  "timestamp": 1705312800123458,
+  "operation": "INSERT",
+  "table": "users",
+  "key": 1,
+  "after": {"id": 1, "name": "Alice"},
+  "batch_id": "batch_001",
+  "batch_sequence": 1,
+  "batch_total": 3
+}
 ```
 
-### Stop CDC Consumer
-```sql
-CDC STOP CONSUMER consumer1
+### Avro
+
+Binary format with schema:
+```python
+consumer = manager.create_consumer(
+    consumer_id="avro_consumer",
+    format=OutputFormat.AVRO
+)
 ```
 
-### List Consumers
-```sql
-CDC LIST CONSUMERS
+### Protobuf
+
+Binary format:
+```python
+consumer = manager.create_consumer(
+    consumer_id="proto_consumer",
+    format=OutputFormat.PROTOBUF
+)
 ```
+
+## Monitoring
 
 ### CDC Statistics
-```sql
-CDC STATS
+
+```python
+stats = manager.get_stats()
+
+print(f"""
+Total Events: {stats['total_events']}
+Active Consumers: {stats['active_consumers']}
+Active Batches: {stats['active_batches']}
+Kafka Connected: {stats['kafka_connected']}
+""")
 ```
 
-### Setup Kafka
-```sql
-CDC SETUP KAFKA localhost:9092 PREFIX kosdb.cdc
+### Consumer Position
+
+```python
+position = consumer.get_position()
+
+print(f"""
+Consumer: {position['consumer_id']}
+Sequence: {position['sequence_number']}
+Tables: {position['tables']}
+Format: {position['format']}
+Group Batches: {position['group_batches']}
+""")
 ```
 
-### Create Snapshot
-```sql
-CDC SNAPSHOT users,orders,products
+## Best Practices
+
+### 1. Use Batch Grouping for Transactional Processing
+
+```python
+def on_batch_complete(batch_id, events):
+    # Process entire batch as a unit
+    with database.transaction():
+        for event_bytes in events:
+            event = json.loads(event_bytes)
+            apply_change(event)
+```
+
+### 2. Implement Backpressure with Rate Limiting
+
+```python
+# Protect downstream systems
+manager = BatchCDCManager(
+    rate_limit=True,
+    max_events_per_second=1000.0  # Adjust based on consumer capacity
+)
+```
+
+### 3. Filter Early to Reduce Load
+
+```python
+# Filter at the consumer level
+consumer = manager.create_consumer(
+    tables={"important_table"},
+    operations={BatchCDCEventType.INSERT, BatchCDCEventType.UPDATE}
+)
+```
+
+### 4. Handle Batch Markers for State Tracking
+
+```python
+active_batches = set()
+
+def on_event(event_bytes):
+    event = json.loads(event_bytes)
+    
+    if event['operation'] == 'BATCH_START':
+        active_batches.add(event['batch_id'])
+    elif event['operation'] == 'BATCH_END':
+        active_batches.discard(event['batch_id'])
+```
+
+## Troubleshooting
+
+### High Memory Usage
+
+**Cause**: Large batches buffering in memory
+
+**Solution**:
+```python
+# Use rate limiting
+manager = BatchCDCManager(rate_limit=True)
+
+# Or consume without batch grouping
+consumer = manager.create_consumer(group_batches=False)
+```
+
+### Missing Batch Events
+
+**Cause**: Consumer filtering out batch markers
+
+**Solution**:
+```python
+# Include batch markers in operations
+operations={
+    BatchCDCEventType.INSERT,
+    BatchCDCEventType.BATCH_START,
+    BatchCDCEventType.BATCH_END
+}
+```
+
+### Kafka Lag
+
+**Cause**: Large batches overwhelming Kafka
+
+**Solution**:
+```python
+# Reduce batch size or add rate limiting
+manager = BatchCDCManager(
+    rate_limit=True,
+    max_events_per_second=5000.0
+)
 ```
 
 ## API Reference
 
-### CDCEvent
+### BatchCDCManager
 
 ```python
-from cdc import CDCEvent, OperationType
-
-event = CDCEvent(
-    sequence_number=1,
-    timestamp=1234567890000000,
-    operation=OperationType.INSERT,
-    table="users",
-    key="user_001",
-    after={'name': 'John', 'email': 'john@example.com'},
-    transaction_id="tx_123"
-)
+class BatchCDCManager:
+    def __init__(self, rate_limit: bool = True)
+    def emit_event(self, ...) -> int
+    def emit_batch_start(self, ...) -> str
+    def emit_batch_command(self, ...) -> int
+    def emit_batch_end(self, ...) -> int
+    def create_consumer(self, ...) -> BatchCDCConsumer
+    def setup_kafka(self, ...)
+    def get_stats(self) -> Dict[str, Any]
 ```
 
-### CDCEventEncoder
+### BatchCDCEvent
 
 ```python
-from cdc import CDCEventEncoder, OutputFormat
-
-# Encode to different formats
-json_bytes = CDCEventEncoder.encode(event, OutputFormat.JSON)
-avro_bytes = CDCEventEncoder.encode(event, OutputFormat.AVRO)
-proto_bytes = CDCEventEncoder.encode(event, OutputFormat.PROTOBUF)
-```
-
-### CDCLog
-
-```python
-from cdc import CDCLog
-
-log = CDCLog()
-
-# Append event
-seq = log.append(event)
-
-# Get events from sequence
-events = log.get_events(start_seq=100, limit=1000)
-
-# Subscribe to events
-def on_event(event):
-    print(f"Received: {event}")
-
-log.subscribe(on_event)
-
-# Create snapshot
-snapshot = log.create_snapshot(['users', 'orders'])
-```
-
-### CDCConsumer
-
-```python
-from cdc import CDCConsumer, OutputFormat, OperationType
-
-consumer = CDCConsumer(
-    consumer_id="my_consumer",
-    cdc_log=log,
-    tables={"users", "orders"},  # Filter tables
-    operations={OperationType.INSERT, OperationType.UPDATE},  # Filter ops
-    output_format=OutputFormat.JSON,
-    start_from_latest=False  # Include snapshot
-)
-
-def handle_event(data: bytes):
-    # Process encoded event
-    pass
-
-consumer.start(handle_event)
-
-# Stop later
-consumer.stop()
-```
-
-### KafkaCDCConnector
-
-```python
-from cdc import KafkaCDCConnector
-
-# Setup connector
-connector = KafkaCDCConnector(
-    bootstrap_servers="localhost:9092",
-    topic_prefix="kosdb.cdc"
-)
-connector.connect()
-
-# Produce event
-connector.produce_event(event, format=OutputFormat.JSON)
-
-# Create consumer
-def process_event(event):
-    print(f"Received: {event}")
-
-connector.create_consumer(
-    group_id="my_group",
-    tables=["users", "orders"],
-    callback=process_event
-)
-
-# Cleanup
-connector.close()
-```
-
-### CDCManager
-
-```python
-from cdc import get_cdc_manager, OperationType
-
-manager = get_cdc_manager()
-
-# Emit events
-manager.emit_event(
-    operation=OperationType.INSERT,
-    table="users",
-    key="user_001",
-    after={'name': 'John'}
-)
-
-# Create consumer
-consumer = manager.create_consumer(
-    consumer_id="consumer1",
-    tables={"users"},
-    format=OutputFormat.JSON,
-    callback=lambda d: print(d)
-)
-
-# Setup Kafka
-manager.setup_kafka("localhost:9092", "kosdb.cdc")
-
-# Get stats
-stats = manager.get_stats()
-```
-
-## Example: Real-time Analytics
-
-```python
-from cdc import get_cdc_manager, CDCConsumer, OutputFormat, OperationType
-import json
-
-# Setup CDC
-manager = get_cdc_manager()
-
-# Analytics consumer
-def analytics_handler(data: bytes):
-    event = json.loads(data)
+@dataclass
+class BatchCDCEvent:
+    sequence_number: int
+    timestamp: int
+    operation: BatchCDCEventType
+    table: str
+    key: Any
+    before: Optional[Dict]
+    after: Optional[Dict]
+    transaction_id: Optional[str]
+    lsn: Optional[int]
+    batch_id: Optional[str]
+    batch_sequence: Optional[int]
+    batch_total: Optional[int]
+    batch_error_mode: Optional[str]
     
-    # Send to analytics pipeline
-    if event['table'] == 'orders':
-        print(f"Order event: {event['operation']} - {event['key']}")
-        # analytics_pipeline.track(event)
-
-# Start consumer for orders
-consumer = manager.create_consumer(
-    consumer_id="analytics_orders",
-    tables={"orders"},
-    operations={OperationType.INSERT},
-    format=OutputFormat.JSON,
-    callback=analytics_handler
-)
-
-# Emit events from application
-def on_order_created(order_id, order_data):
-    manager.emit_event(
-        operation=OperationType.INSERT,
-        table="orders",
-        key=order_id,
-        after=order_data
-    )
-
-# Example usage
-on_order_created("order_123", {
-    'customer_id': 'cust_456',
-    'total': 99.99,
-    'items': 3
-})
+    def is_batch_event(self) -> bool
+    def is_batch_marker(self) -> bool
+    def to_dict(self) -> Dict[str, Any]
 ```
 
-## Example: Kafka Streaming
+### BatchCDCConsumer
 
 ```python
-from cdc import get_cdc_manager
-
-manager = get_cdc_manager()
-
-# Configure Kafka
-manager.setup_kafka(
-    bootstrap_servers="kafka:9092",
-    topic_prefix="ecommerce.cdc"
-)
-
-# All events now automatically stream to Kafka
-# Topic format: {prefix}.{table_name}
-
-# Example topics:
-# - ecommerce.cdc.users
-# - ecommerce.cdc.orders
-# - ecommerce.cdc.products
+class BatchCDCConsumer:
+    def start(
+        self,
+        callback: Optional[Callable[[bytes], None]] = None,
+        batch_callback: Optional[Callable[[str, List[bytes]], None]] = None
+    )
+    def stop()
+    def get_position() -> Dict[str, Any]
 ```
 
-## Configuration
+## See Also
 
-```json
-{
-    "cdc": {
-        "log_file": "cdc.log",
-        "default_format": "json",
-        "snapshot_batch_size": 1000,
-        "consumer_poll_interval_ms": 100
-    }
-}
-```
-
-## Testing
-
-```bash
-python test_cdc.py
-```
-
-All 15 tests passing ✓
+- [Batch Error Handling](BATCH_ERROR_HANDLING.md)
+- [Replication Batch Guide](REPLICATION_BATCH.md)
+- [Security Considerations](SECURITY_README.md)

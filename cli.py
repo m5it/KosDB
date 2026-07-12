@@ -8,6 +8,7 @@ Features:
 - Colored output for better readability
 - Connection management with configurable host/port
 - Pretty-printed results for tables and structured data
+- Multi-command batch support with semicolon separation
 """
 
 import socket
@@ -39,6 +40,11 @@ class Colors:
     # Background colors
     BG_BLACK = '\033[40m'
     BG_RED = '\033[41m'
+    BG_GREEN = '\033[42m'
+    BG_YELLOW = '\033[43m'
+    BG_BLUE = '\033[44m'
+
+
 class LevelDBClient:
     """Client for connecting to LevelDB Socket Server."""
     
@@ -51,15 +57,14 @@ class LevelDBClient:
         self.socket: Optional[socket.socket] = None
         self.authenticated = False
         self.current_db: Optional[str] = None
-        self.use_colors = sys.stdout.isatty()  # Only use colors in TTY
-        self.cache_enabled = True  # Track cache status
-        self.port = port
-        self.username = username
-        self.password = password
-        self.socket: Optional[socket.socket] = None
-        self.authenticated = False
-        self.current_db: Optional[str] = None
-        self.use_colors = sys.stdout.isatty()  # Only use colors in TTY
+        self.use_colors = sys.stdout.isatty()
+        self.cache_enabled = True
+    
+    def _colorize(self, text: str, color: str) -> str:
+        """Apply color to text if colors are enabled."""
+        if self.use_colors:
+            return f"{color}{text}{Colors.RESET}"
+        return text
     
     def connect(self) -> bool:
         """Establish connection to server."""
@@ -99,7 +104,7 @@ class LevelDBClient:
         if not self.socket:
             return None
         try:
-            data = self.socket.recv(16384)
+            data = self.socket.recv(65536)
             if not data:
                 return None
             return data.decode().strip()
@@ -109,6 +114,17 @@ class LevelDBClient:
         except Exception as e:
             print(self._colorize(f"ERROR: Failed to receive: {e}", Colors.RED))
             return None
+    
+    def execute_batch(self, commands: str) -> str:
+        """Execute multiple commands in batch mode."""
+        if not self.send(commands):
+            return "ERROR: Failed to send batch"
+        
+        response = self.receive()
+        if response is None:
+            return "ERROR: No response from server"
+        
+        return response
     
     def authenticate(self) -> bool:
         """Authenticate with server."""
@@ -129,344 +145,196 @@ class LevelDBClient:
         response = self.receive()
         if response and response.startswith("OK"):
             self.authenticated = True
-            print(self._colorize(f"\n✓ {response}", Colors.GREEN))
+            print(self._colorize(f"Authenticated as {self.username}", Colors.GREEN))
             return True
         else:
             print(self._colorize(f"ERROR: {response}", Colors.RED))
             return False
     
-    def execute(self, command: str) -> str:
-        """Execute a command and return response."""
-        self.commands = [
-            'SELECT', 'INSERT', 'UPDATE', 'DELETE',
-            'CREATE', 'DROP', 'USE', 'SHOW',
-            'DATABASES', 'TABLES', 'USERS',
-            'HELP', 'QUIT', 'EXIT',
-            'FROM', 'WHERE', 'ORDER', 'BY', 'ASC', 'DESC',
-            'INTO', 'VALUES', 'SET',
-            'MASTER', 'SLAVE', 'STATUS',
-            'START', 'STOP', 'RESET',
-            'CACHE', 'ENABLE', 'DISABLE', 'STATS',
-        ]
-        """Format server response with colors."""
-        if response.startswith("OK"):
-            # Success message
-            if "\n" in response:
-                # Multi-line result (like table output)
-                lines = response.split('\n')
-                formatted = [self._colorize(lines[0], Colors.GREEN)]
-                
-                # Format table output
-                if len(lines) > 1 and '|' in lines[1]:
-                    formatted.extend(self._format_table(lines[1:]))
-                else:
-                    formatted.extend(lines[1:])
-                
-                return '\n'.join(formatted)
-            else:
-                return self._colorize(response, Colors.GREEN)
-        
-        elif response.startswith("ERROR"):
-            return self._colorize(response, Colors.RED)
-        
-        elif response.startswith("Empty set"):
-            return self._colorize(response, Colors.YELLOW)
-        
-                if command.lower() in ('quit', 'exit', 'q'):
-                    break
-                
-                if command.lower() == 'help':
-                    self._print_help()
-                    continue
-                
-                # Handle CACHE commands locally
-                if command.upper().startswith('CACHE '):
-                    self._handle_cache_command(command)
-                    continue
-                
-                response = self.client.execute(command)
-                print(self.client.format_response(response))
-class InteractiveShell:
-    """Interactive shell with readline support."""
-    
-    def __init__(self, client: LevelDBClient):
-        self.client = client
-        self.history_file = os.path.expanduser("~/.leveldb_cli_history")
-        self.commands = [
-            'SELECT', 'INSERT', 'UPDATE', 'DELETE',
-            'CREATE', 'DROP', 'USE', 'SHOW',
-            'DATABASES', 'TABLES', 'USERS',
-            'HELP', 'QUIT', 'EXIT',
-            self.save_history()
-            self.client.disconnect()
-            print(self.client._colorize("\nGoodbye!", Colors.CYAN))
-    
-    def _print_help(self):
-        """Print help information."""
-        help_text = """
-Available Commands:
-  Database:     CREATE DATABASE, DROP DATABASE, USE, SHOW DATABASES
-  Tables:       CREATE TABLE, DROP TABLE, SHOW TABLES
-  Data:         INSERT, SELECT, UPDATE, DELETE
-  Transactions: BEGIN, COMMIT, ROLLBACK
-  Cache:        CACHE ENABLE, CACHE DISABLE, CACHE STATS, CACHE CLEAR
-  Replication:  SHOW MASTER STATUS, SHOW SLAVE STATUS
-  Other:        HELP, QUIT, EXIT
-"""
-        print(help_text)
-    
-    def _handle_cache_command(self, command: str):
-        """Handle cache control commands."""
-        parts = command.upper().split()
-        
-        if len(parts) < 2:
-            print("ERROR: CACHE ENABLE|DISABLE|STATS|CLEAR")
+    def display_batch_results(self, response: str):
+        """Display batch results in formatted way."""
+        if not response:
+            print("No response")
             return
         
-        action = parts[1]
-        
-        if action == 'ENABLE':
-            self.client.cache_enabled = True
-            print(self.client._colorize("OK: Query cache enabled", Colors.GREEN))
-        
-        elif action == 'DISABLE':
-            self.client.cache_enabled = False
-            print(self.client._colorize("OK: Query cache disabled", Colors.YELLOW))
-        
-        elif action == 'STATS':
-            # Send to server for actual stats
-            response = self.client.execute("CACHE STATS")
-            print(self.client.format_response(response))
-        
-        elif action == 'CLEAR':
-            response = self.client.execute("CACHE CLEAR")
-            print(self.client.format_response(response))
-        
-        else:
-            print(f"ERROR: Unknown CACHE command: {action}")
-            import rlcompleter
-            
-            # Load history
-            if os.path.exists(self.history_file):
-                try:
-                    readline.read_history_file(self.history_file)
-                except:
-                    pass
-            
-            # Set up completion
-            readline.set_completer(self._completer)
-            readline.parse_and_bind('tab: complete')
-            readline.set_completer_delims(' \t\n;')
-            
-        except ImportError:
-            pass  # Windows or no readline support
-    
-    def _completer(self, text: str, state: int) -> Optional[str]:
-        """Tab completion function."""
-        matches = [cmd for cmd in self.commands if cmd.upper().startswith(text.upper())]
-        if state < len(matches):
-            # Add space after command for convenience
-            match = matches[state]
-            if text.isupper():
-                return match.upper()
-            return match.lower()
-        return None
-    
-    def save_history(self):
-        """Save command history."""
-        try:
-            import readline
-            readline.write_history_file(self.history_file)
-        except:
-            pass
-    
-    def run(self):
-        """Run interactive shell."""
-        print(self.client._colorize("\n" + "=" * 50, Colors.CYAN))
-        print(self.client._colorize("  LevelDB Interactive CLI", Colors.BOLD + Colors.CYAN))
-        print(self.client._colorize("=" * 50, Colors.CYAN))
-        print("Type 'help' for commands, 'quit' to exit")
-        print("-" * 50 + "\n")
-        
-        try:
-            while True:
-                # Build prompt
-                db_name = self.client.current_db or "none"
-                prompt = f"{self.client.username}@{db_name}> "
-                if self.client.use_colors:
-                    prompt = f"{Colors.GREEN}{self.client.username}{Colors.RESET}@{Colors.YELLOW}{db_name}{Colors.RESET}> "
-                
-                try:
-                    command = input(prompt).strip()
-                except EOFError:
-                    print()
-                    break
-                
-                if not command:
-                    continue
-                
-                # Handle shell commands
-                if command.lower() in ('quit', 'exit', 'q'):
-                    break
-                
-                if command.lower() == 'help':
-                    response = self.client.execute("HELP")
+        # Check if it's a batch response
+        if "[1/" in response and "--- Batch Complete ---" in response:
+            # Colorize batch results
+            lines = response.split('\n')
+            for line in lines:
+                if line.startswith('['):
+                    if 'ERROR:' in line:
+                        print(self._colorize(line, Colors.RED))
+                    elif 'OK:' in line:
+                        print(self._colorize(line, Colors.GREEN))
+                    elif 'BYE:' in line:
+                        print(self._colorize(line, Colors.YELLOW))
+                    else:
+                        print(line)
+                elif 'Batch Complete' in line:
+                    print(self._colorize(line, Colors.CYAN))
                 else:
-                    response = self.client.execute(command)
-                
-                print(self.client.format_response(response))
-                
-                # Check for disconnect
-                if response == "BYE":
-                    break
-        
-        except KeyboardInterrupt:
-            print("\nInterrupted.")
-        finally:
-            self.save_history()
-            self.client.disconnect()
-            print(self.client._colorize("\nGoodbye!", Colors.CYAN))
+                    print(line)
+        else:
+            # Single command response
+            if response.startswith("ERROR"):
+                print(self._colorize(response, Colors.RED))
+            else:
+                print(response)
 
 
-def execute_script(client: LevelDBClient, script_file: str) -> int:
-    """Execute commands from a script file."""
+def read_batch_file(filepath: str) -> str:
+    """Read commands from batch file."""
     try:
-        with open(script_file, 'r') as f:
+        with open(filepath, 'r') as f:
             lines = f.readlines()
+        
+        # Filter out comments and empty lines, join with semicolons
+        commands = []
+        for line in lines:
+            line = line.strip()
+            if line and not line.startswith('--') and not line.startswith('#'):
+                commands.append(line)
+        
+        return '; '.join(commands)
+    except FileNotFoundError:
+        print(f"ERROR: File not found: {filepath}")
+        return ""
     except Exception as e:
-        print(f"ERROR: Cannot read script file: {e}")
-        return 1
+        print(f"ERROR: Failed to read file: {e}")
+        return ""
+
+
+def interactive_mode(client: LevelDBClient):
+    """Run interactive mode with multi-command support."""
+    print("\n" + "=" * 50)
+    print("KosDB Interactive CLI")
+    print("Type SQL commands (end with ; for batch mode)")
+    print("Special commands: \\q to quit, \\batch to enter batch builder")
+    print("=" * 50 + "\n")
     
-    print(f"Executing script: {script_file}")
-    print("-" * 40)
+    # Try to import readline for history
+    try:
+        import readline
+        readline.parse_and_bind('tab: complete')
+    except ImportError:
+        pass
     
-    exit_code = 0
-    line_num = 0
+    batch_buffer = []
+    in_batch_mode = False
     
-    for line in lines:
-        line_num += 1
-        line = line.strip()
-        
-        # Skip comments and empty lines
-        if not line or line.startswith('#') or line.startswith('--'):
-            continue
-        
-        print(f"[{line_num:3d}] {line}")
-        
-        response = client.execute(line)
-        print(client.format_response(response))
-        print()
-        
-        # Check for errors
-        if response.startswith("ERROR"):
-            exit_code = 1
-            # Continue execution unless it's a connection error
+    while True:
+        try:
+            if in_batch_mode:
+                prompt = "batch> "
+            else:
+                prompt = "kosdb> "
+            
+            line = input(prompt).strip()
+            
+            if not line:
+                continue
+            
+            # Special commands
+            if line == '\\q':
+                break
+            
+            if line == '\\batch':
+                in_batch_mode = True
+                batch_buffer = []
+                print("Entering batch mode. Type \\end to execute, \\cancel to abort")
+                continue
+            
+            if line == '\\end' and in_batch_mode:
+                in_batch_mode = False
+                if batch_buffer:
+                    batch_cmd = '; '.join(batch_buffer)
+                    print(f"\nExecuting batch ({len(batch_buffer)} commands)...")
+                    response = client.execute_batch(batch_cmd)
+                    client.display_batch_results(response)
+                    batch_buffer = []
+                continue
+            
+            if line == '\\cancel' and in_batch_mode:
+                in_batch_mode = False
+                batch_buffer = []
+                print("Batch cancelled")
+                continue
+            
+            # In batch mode, accumulate commands
+            if in_batch_mode:
+                batch_buffer.append(line)
+                print(f"  [{len(batch_buffer)}] {line}")
+                continue
+            
+            # Check for semicolons - batch mode
+            if ';' in line:
+                response = client.execute_batch(line)
+                client.display_batch_results(response)
+            else:
+                # Single command
+                response = client.execute_batch(line)
+                client.display_batch_results(response)
+            
+            if response == "BYE":
+                break
+                
+        except KeyboardInterrupt:
+            print("\nUse \\q to quit")
+        except EOFError:
+            break
     
-    return exit_code
+    print("\nGoodbye!")
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description='LevelDB Socket Server CLI Client',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  %(prog)s                          # Interactive mode
-  %(prog)s -h localhost -p 9999     # Connect to specific server
-  %(prog)s -u admin -f script.sql   # Execute script file
-  %(prog)s -c "SELECT * FROM users" # Single command mode
-  
-Connection:
-  %(prog)s --host 192.168.1.100 --port 9999 --user admin
-        """
-    )
-    
-    # Connection options
-    conn_group = parser.add_argument_group('Connection Options')
-    conn_group.add_argument('-H', '--host', default='localhost',
-                          help='Server host (default: localhost)')
-    conn_group.add_argument('-p', '--port', type=int, default=9999,
-                          help='Server port (default: 9999)')
-    conn_group.add_argument('-u', '--user', '--username',
-                          help='Username for authentication')
-    conn_group.add_argument('-P', '--password',
-                          help='Password (insecure, use prompt instead)')
-    conn_group.add_argument('-D', '--database',
-                          help='Default database to use')
-    
-    # Execution modes
-    mode_group = parser.add_argument_group('Execution Modes')
-    mode_group.add_argument('-f', '--file', dest='script_file',
-                           help='Execute commands from file')
-    mode_group.add_argument('-c', '--command',
-                           help='Execute single command and exit')
-    mode_group.add_argument('-i', '--interactive', action='store_true',
-                           help='Force interactive mode (default)')
-    
-    # Output options
-    out_group = parser.add_argument_group('Output Options')
-    out_group.add_argument('--no-color', action='store_true',
-                          help='Disable colored output')
-    out_group.add_argument('-v', '--verbose', action='store_true',
-                          help='Verbose output')
-    
-    # Version
-    parser.add_argument('--version', action='version', version='%(prog)s 0.2.0')
+    parser = argparse.ArgumentParser(description='KosDB CLI Client')
+    parser.add_argument('-H', '--host', default='localhost', help='Server host')
+    parser.add_argument('-P', '--port', type=int, default=9999, help='Server port')
+    parser.add_argument('-u', '--user', help='Username')
+    parser.add_argument('-p', '--password', help='Password')
+    parser.add_argument('-c', '--command', help='Execute single command')
+    parser.add_argument('-b', '--batch', metavar='FILE', help='Execute batch from file')
+    parser.add_argument('--no-color', action='store_true', help='Disable colored output')
     
     args = parser.parse_args()
     
-    # Create client
-    client = LevelDBClient(
-        host=args.host,
-        port=args.port,
-        username=args.user,
-        password=args.password
-    )
+    client = LevelDBClient(host=args.host, port=args.port,
+                          username=args.user, password=args.password)
     
-    # Disable colors if requested
     if args.no_color:
         client.use_colors = False
     
     # Connect to server
     if not client.connect():
-        return 1
+        sys.exit(1)
     
     # Authenticate
     if not client.authenticate():
         client.disconnect()
-        return 1
+        sys.exit(1)
     
-    # Use default database if specified
-    if args.database:
-        response = client.execute(f"USE {args.database}")
-        if args.verbose or not response.startswith("OK"):
-            print(client.format_response(response))
-    
-    # Execute based on mode
-    exit_code = 0
-    
-    try:
-        if args.command:
-            # Single command mode
-            response = client.execute(args.command)
-            print(client.format_response(response))
-            if response.startswith("ERROR"):
-                exit_code = 1
-        
-        elif args.script_file:
-            # Script mode
-            exit_code = execute_script(client, args.script_file)
-        
-        else:
-            # Interactive mode (default)
-            shell = InteractiveShell(client)
-            shell.run()
-    
-    finally:
+    # Execute batch file
+    if args.batch:
+        batch_commands = read_batch_file(args.batch)
+        if batch_commands:
+            print(f"Executing batch from {args.batch}...")
+            response = client.execute_batch(batch_commands)
+            client.display_batch_results(response)
         client.disconnect()
+        return
     
-    return exit_code
+    # Execute single command
+    if args.command:
+        response = client.execute_batch(args.command)
+        client.display_batch_results(response)
+        client.disconnect()
+        return
+    
+    # Interactive mode
+    interactive_mode(client)
+    client.disconnect()
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    main()

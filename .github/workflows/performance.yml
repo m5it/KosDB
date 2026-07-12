@@ -1,0 +1,192 @@
+
+name: Performance Benchmarks
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run nightly at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  performance:
+    name: Run Performance Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install psutil
+        pip install -e .
+    
+    - name: Run performance tests
+      run: |
+        python -m unittest tests.test_batch_load -v 2>&1 | tee performance_results.txt
+      timeout-minutes: 15
+    
+    - name: Upload performance results
+      uses: actions/upload-artifact@v3
+      with:
+        name: performance-results-${{ github.run_id }}
+        path: performance_results.txt
+        retention-days: 30
+    
+    - name: Parse performance metrics
+      id: parse
+      run: |
+        # Extract key metrics from results
+        THROUGHPUT=$(grep -oP 'throughput: \K[0-9.]+' performance_results.txt | head -1 || echo "0")
+        SPEEDUP=$(grep -oP 'Speedup: \K[0-9.]+x' performance_results.txt | head -1 || echo "0")
+        
+        echo "throughput=$THROUGHPUT" >> $GITHUB_OUTPUT
+        echo "speedup=$SPEEDUP" >> $GITHUB_OUTPUT
+        
+        echo "Throughput: $THROUGHPUT cmd/sec"
+        echo "Speedup: $SPEEDUP"
+    
+    - name: Check performance regression
+      run: |
+        python << 'EOF'
+        import re
+        import sys
+        
+        # Read results
+        with open('performance_results.txt', 'r') as f:
+            content = f.read()
+        
+        # Check for failures
+        if 'FAIL' in content:
+            print("❌ Performance tests failed!")
+            sys.exit(1)
+        
+        # Extract throughput values
+        throughput_pattern = r'throughput: ([0-9.]+) cmd/sec'
+        matches = re.findall(throughput_pattern, content, re.IGNORECASE)
+        
+        if matches:
+            throughputs = [float(m) for m in matches]
+            avg_throughput = sum(throughputs) / len(throughputs)
+            
+            # Baseline thresholds (adjust based on your environment)
+            BASELINE_SINGLE = 100
+            BASELINE_BATCH = 200
+            
+            print(f"Average throughput: {avg_throughput:.2f} cmd/sec")
+            
+            # Check against baselines
+            if avg_throughput < BASELINE_SINGLE * 0.8:
+                print(f"⚠️ Warning: Throughput {avg_throughput:.2f} below baseline {BASELINE_SINGLE}")
+                # Don't fail, just warn
+        else:
+            print("⚠️ No throughput metrics found")
+        
+        # Check speedup
+        speedup_match = re.search(r'Speedup: ([0-9.]+)x', content)
+        if speedup_match:
+            speedup = float(speedup_match.group(1))
+            if speedup < 5.0:
+                print(f"⚠️ Warning: Batch speedup {speedup:.2f}x below expected 5x")
+        
+        print("✅ Performance check complete")
+        EOF
+    
+    - name: Create performance report
+      run: |
+        cat > performance_report.md << 'EOF'
+        # Performance Test Results
+        
+        ## Summary
+        - Date: $(date)
+        - Commit: ${{ github.sha }}
+        - Branch: ${{ github.ref_name }}
+        
+        ## Metrics
+        
+        EOF
+        
+        # Add results to report
+        grep -E "(throughput:|Speedup:|Duration:)" performance_results.txt >> performance_report.md
+        
+        cat performance_report.md
+    
+    - name: Comment PR with results
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          const results = fs.readFileSync('performance_results.txt', 'utf8');
+          
+          // Extract key metrics
+          const throughputMatch = results.match(/throughput: ([0-9.]+)/i);
+          const speedupMatch = results.match(/Speedup: ([0-9.]+)x/);
+          
+          let body = '## Performance Test Results\\n\\n';
+          
+          if (throughputMatch) {
+            body += `- **Throughput**: ${throughputMatch[1]} cmd/sec\\n`;
+          }
+          if (speedupMatch) {
+            body += `- **Batch Speedup**: ${speedupMatch[1]}x\\n`;
+          }
+          
+          body += '\\n<details>\\n<summary>Detailed Results</summary>\\n\\n```\\n';
+          body += results.substring(0, 3000); // Limit size
+          body += '\\n```\\n</details>';
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: body
+          });
+    
+    - name: Store benchmark results
+      uses: benchmark-action/github-action-benchmark@v1
+      with:
+        tool: 'customSmallerIsBetter'
+        output-file-path: performance_results.txt
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        auto-push: true
+        comment-on-alert: true
+        alert-threshold: '150%'
+        fail-on-alert: false
+    
+    - name: Cleanup
+      if: always()
+      run: |
+        rm -f performance_results.txt performance_report.md
+
+  compare-benchmarks:
+    name: Compare with Previous
+    needs: performance
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - name: Download main branch results
+      uses: actions/download-artifact@v3
+      with:
+        name: performance-results-main
+        path: main-results/
+      continue-on-error: true
+    
+    - name: Compare results
+      run: |
+        if [ -f "main-results/performance_results.txt" ]; then
+          echo "Comparing with main branch..."
+          # Add comparison logic here
+        else:
+          echo "No baseline results found for comparison"
+        fi

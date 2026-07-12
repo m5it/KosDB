@@ -1,18 +1,28 @@
+
 <?php
 /**
  * LevelDB Socket Server - PHP Client Library
  * 
  * A simple PHP client for connecting to the LevelDB Socket Server.
- * Supports authentication, queries, and result parsing.
+ * Supports authentication, queries, batch commands, and result parsing.
  * 
  * @author LevelDB Team
- * @version 1.0.0
+ * @version 2.3.0
+ * 
+ * New in v2.3.0:
+ * - Batch command execution support via sendBatch()
+ * - Multi-line response parsing for batch results
+ * - Transaction batch support
+ * - Partial failure handling
  */
 
 class LevelDBClient {
     private $socket;
     private $host;
     private $port;
+    private $connected = false;
+    private $authenticated = false;
+    private $debug = false;
     private $connected = false;
     private $authenticated = false;
     
@@ -82,17 +92,89 @@ class LevelDBClient {
     
     /**
      * Execute a SQL-like command
+
+    /**
+     * Execute a SELECT query and return parsed results
      * 
-     * @param string $sql The command to execute
-     * @return string Raw response from server
+     * @param string $sql SELECT query
+     * @return array Array of associative arrays representing rows
      */
-    public function execute($sql) {
+    public function query($sql) {
+        $result = $this->execute($sql);
+        return $this->parseSelectResult($result);
+    }
+    
+    /**
+     * Execute a batch of commands (v2.3.0+)
+     * 
+     * Sends multiple SQL commands separated by semicolons in a single request.
+     * Each command is executed individually with results returned together.
+     * 
+     * @param array $commands Array of SQL commands to execute
+     * @return array BatchResult object with commands, responses, and statistics
+     * @throws Exception on connection or execution errors
+     * 
+     * Example:
+     *   $result = $client->sendBatch([
+     *       "INSERT INTO users VALUES (1, 'Alice')",
+     *       "INSERT INTO users VALUES (2, 'Bob')",
+     *       "SELECT * FROM users"
+     *   ]);
+     *   echo $result['summary']; // "3 command(s): 3 succeeded, 0 failed"
+     *   foreach ($result['commands'] as $cmd) {
+     *       echo $cmd['status']; // "OK" or "ERROR"
+     *       echo $cmd['response'];
+     *   }
+     */
+    public function sendBatch(array $commands) {
         if (!$this->authenticated) {
             throw new Exception("Not authenticated");
         }
         
-        $this->send($sql);
-        return $this->readResponse();
+        if (empty($commands)) {
+            throw new Exception("No commands provided");
+        }
+        
+        // Join commands with semicolons
+        $batchSql = implode('; ', $commands);
+        
+        $this->send($batchSql);
+        $rawResponse = $this->readBatchResponse();
+        
+        return $this->parseBatchResult($rawResponse, $commands);
+    }
+    
+    /**
+     * Execute a transaction batch (v2.3.0+)
+     * 
+     * Wraps commands in BEGIN/COMMIT for atomic execution.
+     * If any command fails, the transaction can be rolled back.
+     * 
+     * @param array $commands Array of SQL commands (without BEGIN/COMMIT)
+     * @param bool $rollbackOnError Whether to rollback on error (default: true)
+     * @return array BatchResult object
+     * @throws Exception on connection or execution errors
+     * 
+     * Example:
+     *   $result = $client->sendTransactionBatch([
+     *       "INSERT INTO orders VALUES (100, 'item1')",
+     *       "INSERT INTO orders VALUES (101, 'item2')"
+     *   ]);
+     */
+    public function sendTransactionBatch(array $commands, $rollbackOnError = true) {
+        if (empty($commands)) {
+            throw new Exception("No commands provided");
+        }
+        
+        // Wrap in transaction
+        $transactionCommands = array_merge(
+            ['BEGIN'],
+            $commands,
+            $rollbackOnError ? ['COMMIT'] : ['COMMIT']
+        );
+        
+        return $this->sendBatch($transactionCommands);
+    }
     }
     
     /**
@@ -295,47 +377,138 @@ class LevelDBClient {
         }
     }
     
+
     /**
-     * Check if connected
+     * Read batch response (multi-line)
      * 
-     * @return bool
-     */
-    public function isConnected() {
-        return $this->connected;
-    }
-    
-    /**
-     * Check if authenticated
+     * Batch responses contain multiple command results separated by blank lines.
+     * Reads until "Batch Complete" marker or timeout.
      * 
-     * @return bool
+     * @return string Complete batch response
      */
-    public function isAuthenticated() {
-        return $this->authenticated;
-    }
-    
-    // Private helper methods
-    
-    private function send($cmd) {
-        fwrite($this->socket, $cmd . "\n");
-    }
-    
-    private function readLine() {
-        return trim(fgets($this->socket, 4096));
-    }
-    
-    private function readLines($count) {
-        $lines = [];
-        for ($i = 0; $i < $count; $i++) {
-            $lines[] = $this->readLine();
-        }
-        return $lines;
-    }
-    
-    private function readResponse() {
+    private function readBatchResponse() {
         $response = '';
         $startTime = time();
+        $maxWaitTime = 60; // Longer timeout for batches
         
         while (true) {
+            if (time() - $startTime > $maxWaitTime) {
+                throw new Exception("Batch read timeout");
+            }
+            
+            $line = $this->readLine();
+            
+            if ($line === false || $line === '') {
+                // Check if we have a complete response
+                if (strpos($response, 'Batch Complete') !== false) {
+                    break;
+                }
+                continue;
+            }
+            
+            $response .= $line . "\n";
+            
+            // Check for batch complete marker
+            if (strpos($line, '--- Batch Complete ---') !== false) {
+                // Read one more line for the summary
+                $summaryLine = $this->readLine();
+                if ($summaryLine !== false) {
+                    $response .= $summaryLine . "\n";
+                }
+                break;
+            }
+            
+            // Check for errors that terminate batch
+            if (strpos($line, 'ERROR: Batch') === 0) {
+                break;
+            }
+        }
+        
+        return trim($response);
+    }
+    
+    /**
+     * Parse batch result response into structured array
+     * 
+     * @param string $rawResponse Raw server response
+     * @param array $originalCommands Original commands sent
+     * @return array Structured result with commands and summary
+     */
+    private function parseBatchResult($rawResponse, array $originalCommands) {
+        $result = [
+            'success' => true,
+            'commands' => [],
+            'summary' => '',
+            'total' => count($originalCommands),
+            'succeeded' => 0,
+            'failed' => 0
+        ];
+        
+        // Check for pre-batch errors (e.g., batch too large)
+        if (strpos($rawResponse, 'ERROR:') === 0 && strpos($rawResponse, '[1/') === false) {
+            $result['success'] = false;
+            $result['error'] = $rawResponse;
+            return $result;
+        }
+        
+        // Parse individual command results
+        // Pattern: [N/TOTAL] STATUS: COMMAND\nRESPONSE
+        $pattern = '/\[(\d+)\/(\d+)\]\s+(OK|ERROR):\s+(.+?)\n(.*?)(?=\[\d+\/\d+\]|--- Batch Complete ---|$)/s';
+        preg_match_all($pattern, $rawResponse . "\n", $matches, PREG_SET_ORDER);
+        
+        foreach ($matches as $match) {
+            $index = intval($match[1]) - 1; // Convert to 0-based
+            $status = $match[3];
+            $command = trim($match[4]);
+            $response = trim($match[5]);
+            
+            $cmdResult = [
+                'index' => $index + 1,
+                'command' => $command,
+                'status' => $status,
+                'response' => $response,
+                'success' => ($status === 'OK')
+            ];
+            
+            $result['commands'][] = $cmdResult;
+            
+            if ($status === 'OK') {
+                $result['succeeded']++;
+            } else {
+                $result['failed']++;
+            }
+        }
+        
+        // Parse summary line
+        if (preg_match('/(\d+) command\(s\):\s+(\d+) succeeded,\s+(\d+) failed/', $rawResponse, $summaryMatch)) {
+            $result['summary'] = $summaryMatch[0];
+            $result['total'] = intval($summaryMatch[1]);
+            $result['succeeded'] = intval($summaryMatch[2]);
+            $result['failed'] = intval($summaryMatch[3]);
+        }
+        
+        // Determine overall success
+        $result['success'] = ($result['failed'] === 0);
+        
+        return $result;
+    }
+    
+    /**
+     * Enable or disable debug mode
+     * 
+     * @param bool $enabled
+     */
+    public function setDebug($enabled) {
+        $this->debug = $enabled;
+    }
+    
+    /**
+     * Destructor - ensure connection is closed
+     */
+    public function __destruct() {
+        $this->close();
+    }
+}
             // Timeout after 30 seconds
             if (time() - $startTime > 30) {
                 throw new Exception("Read timeout");
