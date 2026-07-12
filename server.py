@@ -91,12 +91,12 @@ class ClientHandler(threading.Thread):
             if len(parts) != 3:
                 return "ERROR: Usage: LOGIN <username> <password>"
             username, password = parts[1], parts[2]
-            success, token = self.authenticator.login(username, password)
+            success, token, user_info = self.authenticator.authenticate(username, password)
             if success:
                 self.authenticated = True
                 self.session_token = token
                 self.client_state['username'] = username
-                self.client_state['is_admin'] = self.authenticator.is_admin(username)
+                self.client_state['is_admin'] = user_info.get('is_admin', False)
                 return f"OK: Welcome {username}"
             return "ERROR: Authentication failed"
         
@@ -131,7 +131,7 @@ class ClientHandler(threading.Thread):
             "  USE <database>       - Select database",
             "  SHOW DATABASES       - List databases",
             "  SHOW TABLES          - List tables",
-            "  CREATE TABLE <name>    - Create table",
+            "  CREATE TABLE <name>  - Create table",
             "  INSERT INTO <table>    - Insert data",
             "  SELECT ...           - Query data",
             "  HELP                 - Show this help",
@@ -217,6 +217,12 @@ def main():
     parser.add_argument('--host', default='0.0.0.0', help='Bind host')
     parser.add_argument('--port', type=int, default=5555, help='Bind port')
     parser.add_argument('--data-dir', default='./data', help='Data directory')
+
+def main():
+    parser = argparse.ArgumentParser(description='KosDB Socket Server')
+    parser.add_argument('--host', default='0.0.0.0', help='Bind host')
+    parser.add_argument('--port', type=int, default=5555, help='Bind port')
+    parser.add_argument('--data-dir', default='./data', help='Data directory')
     parser.add_argument('--server-id', type=int, default=1, help='Server ID')
     parser.add_argument('--tls-cert', help='TLS certificate file')
     parser.add_argument('--tls-key', help='TLS key file')
@@ -228,12 +234,11 @@ def main():
     # Handle admin creation
     if args.prepare_admin:
         db = Database(args.data_dir)
-        auth = Authenticator(db)
-        success = auth.create_user(args.prepare_admin, args.prepare_password or 'admin', is_admin=True)
-        if success:
-            print(f"User '{args.prepare_admin}' created")
-        else:
+        result = db.create_user(args.prepare_admin, args.prepare_password or 'admin', is_admin=True)
+        if "already exists" in result:
             print(f"User '{args.prepare_admin}' already exists")
+        else:
+            print(f"User '{args.prepare_admin}' created")
         return
     
     # Setup TLS
@@ -254,5 +259,7 @@ def main():
     server.start()
 
 
+if __name__ == '__main__':
+    main()
 if __name__ == '__main__':
     main()
