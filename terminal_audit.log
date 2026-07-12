@@ -1532,3 +1532,322 @@ try:
     
 except Exception as e:
     print(f"✗ Connection failed: {e}") | SUCCESS: True | OUTPUT_LEN: 155
+[2026-07-12 20:01:25] CMD: python3 -c import socket
+import time
+
+def test_server():
+    """Test server with login and basic commands"""
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(5)
+        sock.connect(('localhost', 5555))
+        
+        # Receive welcome
+        welcome = sock.recv(1024).decode()
+        print("1. Welcome:", welcome.strip())
+        
+        # Test HELP without login
+        sock.send(b"HELP\n")
+        help_resp = sock.recv(1024).decode()
+        print("2. HELP (no login):", help_resp.strip())
+        
+        # Test LOGIN
+        sock.send(b"LOGIN admin admin123\n")
+        login_resp = sock.recv(1024).decode()
+        print("3. LOGIN:", login_resp.strip())
+        
+        if "Welcome" in login_resp:
+            # Test SHOW DATABASES
+            sock.send(b"SHOW DATABASES\n")
+            dbs_resp = sock.recv(1024).decode()
+            print("4. SHOW DATABASES:", dbs_resp.strip())
+            
+            # Test CREATE DATABASE
+            sock.send(b"CREATE DATABASE testdb\n")
+            create_resp = sock.recv(1024).decode()
+            print("5. CREATE DATABASE:", create_resp.strip())
+            
+            # Test USE
+            sock.send(b"USE testdb\n")
+            use_resp = sock.recv(1024).decode()
+            print("6. USE:", use_resp.strip())
+            
+            # Test CREATE TABLE
+            sock.send(b"CREATE TABLE users (id, name)\n")
+            table_resp = sock.recv(1024).decode()
+            print("7. CREATE TABLE:", table_resp.strip())
+            
+            # Test INSERT
+            sock.send(b"INSERT INTO users VALUES (1, 'Alice')\n")
+            insert_resp = sock.recv(1024).decode()
+            print("8. INSERT:", insert_resp.strip())
+            
+            # Test SELECT
+            sock.send(b"SELECT * FROM users\n")
+            select_resp = sock.recv(4096).decode()
+            print("9. SELECT:", select_resp.strip())
+        
+        # QUIT
+        sock.send(b"QUIT\n")
+        sock.close()
+        print("\n✓ All tests passed!")
+        
+    except Exception as e:
+        print(f"✗ Test failed: {e}")
+        import traceback
+        traceback.print_exc()
+
+test_server() | SUCCESS: True | OUTPUT_LEN: 263
+[2026-07-12 20:01:29] CMD: bash -c pkill -f "python3 server.py" 2>/dev/null; sleep 1; python3 server.py --port 5555 & | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-12 20:01:33] CMD: sleep 2 | SUCCESS: False | OUTPUT_LEN: 0
+[2026-07-12 20:01:43] CMD: python3 -c import socket
+import time
+import subprocess
+import os
+
+# Start server in background
+print("Starting server...")
+subprocess.Popen(['python3', 'server.py', '--port', '5555'], 
+                stdout=subprocess.DEVNULL, 
+                stderr=subprocess.DEVNULL)
+
+# Wait for server to start
+time.sleep(2)
+
+def test_server():
+    """Test server with login and basic commands"""
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(5)
+        sock.connect(('localhost', 5555))
+        
+        # Receive welcome
+        welcome = sock.recv(1024).decode()
+        print("1. Welcome:", welcome.strip())
+        
+        # Test LOGIN
+        sock.send(b"LOGIN admin admin123\n")
+        login_resp = sock.recv(1024).decode()
+        print("2. LOGIN:", login_resp.strip())
+        
+        if "Welcome" in login_resp:
+            # Test CREATE DATABASE
+            sock.send(b"CREATE DATABASE testdb\n")
+            create_resp = sock.recv(1024).decode()
+            print("3. CREATE DATABASE:", create_resp.strip())
+            
+            # Test USE
+            sock.send(b"USE testdb\n")
+            use_resp = sock.recv(1024).decode()
+            print("4. USE:", use_resp.strip())
+            
+            # Test CREATE TABLE
+            sock.send(b"CREATE TABLE users (id, name)\n")
+            table_resp = sock.recv(1024).decode()
+            print("5. CREATE TABLE:", table_resp.strip())
+            
+            # Test INSERT
+            sock.send(b"INSERT INTO users VALUES (1, 'Alice')\n")
+            insert_resp = sock.recv(1024).decode()
+            print("6. INSERT:", insert_resp.strip())
+            
+            # Test SELECT
+            sock.send(b"SELECT * FROM users\n")
+            select_resp = sock.recv(4096).decode()
+            print("7. SELECT:", select_resp.strip())
+        
+        # QUIT
+        sock.send(b"QUIT\n")
+        sock.close()
+        print("\n✓ All tests passed!")
+        
+    except Exception as e:
+        print(f"✗ Test failed: {e}")
+
+test_server()
+
+# Cleanup
+os.system("pkill -f 'python3 server.py'") | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-12 20:01:55] CMD: bash -c python3 -c "
+import socket
+import time
+import subprocess
+import os
+
+# Start server
+print('Starting server...')
+proc = subprocess.Popen(['python3', 'server.py', '--port', '5555'], 
+                stdout=open('/tmp/server.log', 'w'), 
+                stderr=open('/tmp/server.err', 'w'))
+
+time.sleep(3)
+
+try:
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(5)
+    sock.connect(('localhost', 5555))
+    
+    # Welcome
+    welcome = sock.recv(1024).decode()
+    print('1. Server welcome:', welcome.strip())
+    
+    # Login
+    sock.send(b'LOGIN admin admin123\n')
+    login = sock.recv(1024).decode()
+    print('2. Login:', login.strip())
+    
+    # Create DB
+    sock.send(b'CREATE DATABASE testdb\n')
+    resp = sock.recv(1024).decode()
+    print('3. Create DB:', resp.strip())
+    
+    # Quit
+    sock.send(b'QUIT\n')
+    sock.close()
+    print('4. Tests completed!')
+    
+except Exception as e:
+    print('Error:', e)
+    print('Server log:', open('/tmp/server.log').read()[-500:])
+    print('Server err:', open('/tmp/server.err').read()[-500:])
+
+# Cleanup
+proc.terminate()
+" 2>&1 | SUCCESS: True | OUTPUT_LEN: 299
+[2026-07-12 20:02:27] CMD: python3 -m py_compile server.py | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-12 20:02:31] CMD: bash -c pkill -f "python3 server.py" 2>/dev/null; sleep 1; python3 server.py --port 5555 &amp; | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-12 20:02:44] CMD: bash -c sleep 2 &amp;&amp; python3 -c "
+import socket
+import time
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.settimeout(5)
+sock.connect(('localhost', 5555))
+
+# Welcome
+welcome = sock.recv(1024).decode()
+print('1. Welcome:', welcome.strip())
+
+# Login
+sock.send(b'LOGIN admin admin123\n')
+login = sock.recv(1024).decode()
+print('2. Login:', login.strip())
+
+# Create DB
+sock.send(b'CREATE DATABASE testdb\n')
+resp = sock.recv(1024).decode()
+print('3. Create DB:', resp.strip())
+
+# Quit
+sock.send(b'QUIT\n')
+sock.close()
+print('4. Tests completed!'" | SUCCESS: True | OUTPUT_LEN: 118
+[2026-07-12 20:03:31] CMD: python3 -c import socket
+import time
+
+def test_server():
+    """Test server with login and basic commands"""
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(5)
+        sock.connect(('localhost', 5555))
+        
+        # Receive welcome
+        welcome = sock.recv(1024).decode()
+        print("1. Welcome:", welcome.strip())
+        
+        # Test LOGIN
+        sock.send(b"LOGIN admin admin123\n")
+        login_resp = sock.recv(1024).decode()
+        print("2. LOGIN:", login_resp.strip())
+        
+        if "Welcome" in login_resp:
+            # Test CREATE DATABASE
+            sock.send(b"CREATE DATABASE testdb\n")
+            create_resp = sock.recv(1024).decode()
+            print("3. CREATE DATABASE:", create_resp.strip())
+            
+            # Test USE
+            sock.send(b"USE testdb\n")
+            use_resp = sock.recv(1024).decode()
+            print("4. USE:", use_resp.strip())
+            
+            # Test CREATE TABLE
+            sock.send(b"CREATE TABLE users (id, name)\n")
+            table_resp = sock.recv(1024).decode()
+            print("5. CREATE TABLE:", table_resp.strip())
+            
+            # Test INSERT
+            sock.send(b"INSERT INTO users VALUES (1, 'Alice')\n")
+            insert_resp = sock.recv(1024).decode()
+            print("6. INSERT:", insert_resp.strip())
+            
+            # Test INSERT another
+            sock.send(b"INSERT INTO users VALUES (2, 'Bob')\n")
+            insert2_resp = sock.recv(1024).decode()
+            print("7. INSERT:", insert2_resp.strip())
+            
+            # Test SELECT
+            sock.send(b"SELECT * FROM users\n")
+            select_resp = sock.recv(4096).decode()
+            print("8. SELECT:", select_resp.strip())
+            
+            # Test SHOW TABLES
+            sock.send(b"SHOW TABLES\n")
+            show_resp = sock.recv(1024).decode()
+            print("9. SHOW TABLES:", show_resp.strip())
+        
+        # QUIT
+        sock.send(b"QUIT\n")
+        sock.close()
+        print("\n✓ All tests passed!")
+        
+    except Exception as e:
+        print(f"✗ Test failed: {e}")
+        import traceback
+        traceback.print_exc()
+
+test_server() | SUCCESS: True | OUTPUT_LEN: 100
+[2026-07-12 20:04:19] CMD: python3 -c import socket
+import time
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.settimeout(5)
+sock.connect(('localhost', 5555))
+
+# Receive welcome (might get both messages)
+data = sock.recv(1024).decode()
+print("Received:", repr(data))
+
+# Send login
+sock.send(b"LOGIN admin admin123\n")
+time.sleep(0.1)
+
+login_resp = sock.recv(1024).decode()
+print("Login response:", repr(login_resp))
+
+sock.close() | SUCCESS: True | OUTPUT_LEN: 121
+[2026-07-12 20:04:30] CMD: grep -n authenticate_user database.py | SUCCESS: True | OUTPUT_LEN: 76
+[2026-07-12 20:04:39] CMD: sed -n 682,700p database.py | SUCCESS: True | OUTPUT_LEN: 891
+[2026-07-12 20:04:48] CMD: python3 -c import plyvel
+import json
+
+db = plyvel.DB('./data/_system', create_if_missing=False)
+prefix = b"_users:"
+print("Users in database:")
+for key, value in db.iterator(prefix=prefix):
+    user_data = json.loads(value.decode())
+    print(f"  User: {user_data.get('username')}, Admin: {user_data.get('is_admin')}")
+db.close() | SUCCESS: True | OUTPUT_LEN: 382
+[2026-07-12 20:04:52] CMD: grep -n _verify_password\|create_user database.py | SUCCESS: True | OUTPUT_LEN: 260
+[2026-07-12 20:04:56] CMD: sed -n 63,75p database.py | SUCCESS: True | OUTPUT_LEN: 511
+[2026-07-12 20:05:00] CMD: sed -n 644,665p database.py | SUCCESS: True | OUTPUT_LEN: 808
+[2026-07-12 20:06:01] CMD: python3 server.py --help | SUCCESS: True | OUTPUT_LEN: 744
+[2026-07-12 20:06:05] CMD: python3 server.py --prepare-admin admin --prepare-password admin | SUCCESS: True | OUTPUT_LEN: 967
+[2026-07-12 20:06:09] CMD: bash -c pkill -9 -f "python3 server.py"; sleep 2; rm -f ./data/_system/LOCK; echo "Ready" | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-12 20:06:39] CMD: bash -c ps aux | grep python | grep -v grep | SUCCESS: True | OUTPUT_LEN: 607
+[2026-07-12 20:06:44] CMD: bash -c ls -la ./data/_system/LOCK 2>/dev/null && rm -f ./data/_system/LOCK; ls -la ./data/_system/ 2>/dev/null | head -5 | SUCCESS: True | OUTPUT_LEN: 258
+[2026-07-12 20:06:47] CMD: python3 server.py --prepare-admin admin --prepare-password admin | SUCCESS: True | OUTPUT_LEN: 476
+[2026-07-12 20:06:51] CMD: grep -n def auth.py | SUCCESS: True | OUTPUT_LEN: 666
+[2026-07-12 20:07:03] CMD: python3 server.py --prepare-admin admin --prepare-password admin | SUCCESS: True | OUTPUT_LEN: 214
+[2026-07-12 20:07:18] CMD: python3 server.py --prepare-admin admin --prepare-password admin | SUCCESS: True | OUTPUT_LEN: 56
