@@ -1,3 +1,4 @@
+
 """LevelDB database layer with CRUD operations, user management and privileges."""
 
 import os
@@ -5,14 +6,13 @@ import json
 import hashlib
 import secrets
 import time
+import threading
 import plyvel
 from typing import Optional, Dict, Any, List
 from binlog import Binlog
 
 
-class Database:
-    """Wrapper for LevelDB providing MySQL-like database operations with auth."""
-    
+
     def __init__(self, data_dir: str = "data", server_id: int = 1):
         self.data_dir = data_dir
         self.db_path = data_dir
@@ -24,6 +24,10 @@ class Database:
         self._transaction_active = False
         self._transaction_changes: Dict[bytes, Optional[bytes]] = {}
         self._transaction_start_time: float = 0
+        self._db_lock = threading.Lock()  # Thread safety for database switching
+        self._ensure_data_dir()
+        self._open_system_db()
+        self._open_binlog()
         self._ensure_data_dir()
         self._open_system_db()
         self._open_binlog()
@@ -179,11 +183,15 @@ class Database:
                 operation="DROP_DB",
                 data={"db_name": db_name}
             )
-        
-        return f"Database '{db_name}' dropped successfully"
-    
+
+
+
     def use_database(self, db_name: str) -> str:
         """Switch to a database."""
+        # Idempotent check - no-op if already using this database
+        if self.current_db == db_name and self._db:
+            return f"Already using database '{db_name}'"
+        
         if self._transaction_active:
             return "ERROR: Cannot switch database during transaction"
         
@@ -191,21 +199,14 @@ class Database:
         if not os.path.exists(db_path):
             return f"Database '{db_name}' does not exist"
         
-        if self._db:
-            self._db.close()
+        with self._db_lock:
+            if self._db:
+                self._db.close()
+            
+            self._db = plyvel.DB(db_path, create_if_missing=True)
+            self.current_db = db_name
         
-        self._db = plyvel.DB(db_path, create_if_missing=True)
-        self.current_db = db_name
         return f"Switched to database '{db_name}'"
-    
-    def create_table(self, table_name: str, columns: List[str], indexes: List[str] = None) -> str:
-        """Create a table with optional indexes."""
-        if not self._db:
-            return "No database selected. Use USE <database>"
-        
-        schema_key = f"_schema:{table_name}".encode()
-        if self._db.get(schema_key):
-            return f"Table '{table_name}' already exists"
         
         parsed_columns = []
         primary_key = None
