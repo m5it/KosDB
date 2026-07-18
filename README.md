@@ -10,13 +10,6 @@ KosDB v2.3.0 introduces multi-command batch execution with significant performan
 - **CLI Batch Mode** — Execute SQL scripts from files with `-b` flag
 
 ### Performance Optimizations (v2.3.0)
-- **Multi-Command Batches** — Execute multiple commands separated by semicolons (`;`)
-- **Transaction Batches** — BEGIN; INSERT...; INSERT...; COMMIT patterns
-- **Batch Error Handling** — Continue on error or stop, with detailed per-command results
-- **Quoted Semicolon Support** — Semicolons inside strings are handled correctly
-- **CLI Batch Mode** — Execute SQL scripts from files with `-b` flag
-
-### Performance Optimizations (v2.3.0)
 
 - **Command Caching** — Connection-level LRU cache for parsed commands eliminates re-parsing overhead
 - **StringBuilder Pattern** — Memory-efficient response formatting for large batches (100+ commands)
