@@ -1,1 +1,1 @@
-{"sess_id": 328, "mode": "build", "model": "kimi-k2.5:cloud", "persona": "Developer", "used_models": ["kimi-k2.7-code:cloud", "kimi-k2.5:cloud"], "NUM_PROMPT_TOKENS": 24139107, "NUM_RESPONSE_TOKENS": 129285, "NUM_LAST_PROMPT_TOKENS": 162489, "NUM_LAST_RESPONSE_TOKENS": 273}
+{"sess_id": 329, "mode": "build", "model": "kimi-k2.5:cloud", "persona": "Developer", "used_models": ["kimi-k2.7-code:cloud", "kimi-k2.5:cloud"], "NUM_PROMPT_TOKENS": 35822889, "NUM_RESPONSE_TOKENS": 142758, "NUM_LAST_PROMPT_TOKENS": 7809, "NUM_LAST_RESPONSE_TOKENS": 278}

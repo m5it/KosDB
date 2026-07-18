@@ -1,9 +1,12 @@
+
 """
 Command Execution Framework for LevelDB Socket Server
 KosDB v2.3.0 - Batch Execution Support
 """
 
+import re
 from typing import Dict, Any, Optional, List
+from database import Database
 from database import Database
 
 
@@ -160,6 +163,7 @@ class SelectCommand(Command):
             return f"ERROR: {e}"
 
 
+
 class UpdateCommand(Command):
     def execute(self, params, client_state):
         if not self.validate_params(params, ['table', 'set']):
@@ -167,13 +171,13 @@ class UpdateCommand(Command):
         if not client_state.get('current_db'):
             return "ERROR: No database selected"
         try:
-            count = self.db.update(params['table'], params['set'], params.get('where'))
-            return f"OK: Updated {count} row(s)"
+            result = self.db.update(params['table'], params['set'], params.get('where'))
+            # Extract row count from result string like "Updated 5 row(s) in 'table'"
+            match = re.search(r'Updated (\d+) row', result)
+            num = int(match.group(1)) if match else 0
+            return f"OK: Updated {num} row(s)"
         except Exception as e:
             return f"ERROR: {e}"
-
-
-class DeleteCommand(Command):
     def execute(self, params, client_state):
         if not self.validate_params(params, ['table']):
             return "ERROR: Table name required"
