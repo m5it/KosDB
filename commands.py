@@ -5,8 +5,8 @@ KosDB v2.3.0 - Batch Execution Support
 """
 
 import re
+
 from typing import Dict, Any, Optional, List
-from database import Database
 from database import Database
 
 
@@ -177,7 +177,11 @@ class UpdateCommand(Command):
             num = int(match.group(1)) if match else 0
             return f"OK: Updated {num} row(s)"
         except Exception as e:
+
             return f"ERROR: {e}"
+
+
+class DeleteCommand(Command):
     def execute(self, params, client_state):
         if not self.validate_params(params, ['table']):
             return "ERROR: Table name required"
@@ -188,8 +192,6 @@ class UpdateCommand(Command):
             return f"OK: Deleted {count} row(s)"
         except Exception as e:
             return f"ERROR: {e}"
-
-
 class ShowTablesCommand(Command):
     def execute(self, params, client_state):
         if not client_state.get('current_db'):
