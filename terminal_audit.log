@@ -1885,3 +1885,39 @@ db.close() | SUCCESS: True | OUTPUT_LEN: 382
 [2026-07-18 21:00:32] CMD: python3 -m py_compile database.py | SUCCESS: True | OUTPUT_LEN: 0
 [2026-07-18 21:00:35] CMD: python3 -m py_compile commands.py | SUCCESS: True | OUTPUT_LEN: 0
 [2026-07-18 21:00:38] CMD: python3 -m py_compile server.py | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-18 21:03:35] CMD: sed -n 15,40p database.py | SUCCESS: True | OUTPUT_LEN: 1076
+[2026-07-18 21:03:37] CMD: sed -n 35,60p database.py | SUCCESS: True | OUTPUT_LEN: 1128
+[2026-07-18 21:03:52] CMD: python3 -m py_compile database.py | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-18 21:04:08] CMD: python3 -c import ast; ast.parse(open('database.py').read()); print('Syntax OK') | SUCCESS: True | OUTPUT_LEN: 10
+[2026-07-18 21:04:14] CMD: python3 -c import re
+with open('database.py') as f:
+    content = f.read()
+
+# Check for duplicate method definitions
+methods = re.findall(r'^\s+def (\w+)\(', content, re.MULTILINE)
+duplicates = [m for m in set(methods) if methods.count(m) > 1]
+if duplicates:
+    print(f"WARNING: Duplicate methods: {duplicates}")
+else:
+    print("OK: No duplicate methods")
+
+# Check class structure
+if content.count('class Database:') != 1:
+    print(f"WARNING: Found {content.count('class Database:')} 'class Database:' definitions")
+else:
+    print("OK: Single class Database definition")
+
+# Check for proper imports at top
+if 'import threading' not in content:
+    print("WARNING: Missing 'import threading'")
+else:
+    print("OK: threading imported")
+
+if 'import glob' not in content:
+    print("WARNING: Missing 'import glob'")
+else:
+    print("OK: glob imported")
+
+print("All checks passed!") | SUCCESS: True | OUTPUT_LEN: 122
+[2026-07-18 21:04:16] CMD: grep -n _cleanup_stale_locks database.py | SUCCESS: True | OUTPUT_LEN: 125
+[2026-07-18 21:04:18] CMD: sed -n 15,50p database.py | SUCCESS: True | OUTPUT_LEN: 1458

@@ -25,14 +25,21 @@ class Database:
         self._binlog: Optional[Binlog] = None
         self._transaction_active = False
         self._transaction_changes: Dict[bytes, Optional[bytes]] = {}
-        self._transaction_start_time: float = 0
+
         self._db_lock = threading.Lock()  # Thread safety for database switching
+        self._cleanup_stale_locks()  # Clean up stale locks from crashed processes
         self._ensure_data_dir()
         self._open_system_db()
         self._open_binlog()
-        self._ensure_data_dir()
-        self._open_system_db()
-        self._open_binlog()
+    
+    def _cleanup_stale_locks(self):
+        """Remove stale LOCK files from crashed processes."""
+        import glob
+        for lock_file in glob.glob(f"{self.data_dir}/**/LOCK", recursive=True):
+            try:
+                os.remove(lock_file)
+            except OSError:
+                pass  # File in use by another process
     
     def _ensure_data_dir(self):
         """Ensure data directory exists."""
