@@ -12,7 +12,9 @@ from typing import Optional, Dict, Any, List
 from binlog import Binlog
 
 
-
+class Database:
+    """LevelDB database layer with CRUD operations, user management and privileges."""
+    
     def __init__(self, data_dir: str = "data", server_id: int = 1):
         self.data_dir = data_dir
         self.db_path = data_dir
