@@ -98,3 +98,57 @@ User sees old values on refresh.
 ```
 
 Bug 1's fix (idempotent `use_database` + lock) eliminates 99% of these occurrences since all KosCMS pool connections use the same database.
+
+---
+
+## Bug 4: INSERT doesn't support column list syntax
+
+**Status:** FIXED — regex updated, `insert_with_columns` added.
+
+**File:** `parser.py:23-25`
+
+The INSERT regex only matches `INSERT INTO table VALUES (...)`:
+```python
+'INSERT': re.compile(
+    r'^\s*INSERT\s+INTO\s+(?P<table>\w+)\s+VALUES\s*\((?P<values>[^)]+)\)\s*$',
+    re.IGNORECASE
+),
+```
+
+KosCMS sends `INSERT INTO settings (setting_key, value, type) VALUES (...)` which returns `ERROR: Unknown command`. This blocks all new settings saves.
+
+**Fix:** Update the regex to optionally accept a column list:
+```python
+'INSERT': re.compile(
+    r'^\s*INSERT\s+INTO\s+(?P<table>\w+)'
+    r'(?:\s*\((?P<columns>\w[\w\s,]*)\))?'
+    r'\s+VALUES\s*\((?P<values>[^)]+)\)\s*$',
+    re.IGNORECASE
+),
+```
+
+---
+
+## Bug 5: `InsertCommand` double-splits columns list (REGRESSION)
+
+**Status:** FIXED
+
+**File:** `commands.py:147`
+
+The parser (`parser.py:192`) already converts `columns` from a string to a list:
+```python
+if 'columns' in params and params['columns']:
+    params['columns'] = [c.strip() for c in params['columns'].split(',')]
+```
+
+But `commands.py:147` tries to split it again:
+```python
+col_list = [c.strip() for c in columns.split(',')]  # <-- ERROR: 'list' has no attribute 'split'
+```
+
+**Fix:** Change line 147 to:
+```python
+col_list = columns  # parser.py already splits into a list
+```
+
+This causes `ERROR: 'list' object has no attribute 'split'` on every INSERT with column list, blocking all settings saves.
