@@ -1,29 +1,38 @@
-# Plan: Fix INSERT Regex to Support Column Lists
-## ID: 1784437924.8390417
-## Created: 2026-07-19 05:12:04
+# Plan: KosDB Performance Optimization & New Features
+## ID: 1784454267.3777697
+## Created: 2026-07-19 09:44:27
 ## Status: in_progress
 
 ### Goal:
-The KosDB INSERT regex currently only supports `INSERT INTO table VALUES (...)` syntax. We need to extend it to also support `INSERT INTO table (col1, col2, ...) VALUES (...)` syntax that includes an optional column list before VALUES. This is needed because the admin API sends INSERT statements with explicit column lists like `INSERT INTO settings (setting_key, value, type) VALUES (...)`.
+Address critical performance bottlenecks identified by testers in KOSDB_PERFORMANCE.md. Focus on Quick Wins (P1-P4) for immediate impact, then implement new features (UPSERT, BATCH UPDATE) to reduce query count. All changes must maintain backward compatibility and include proper tests.
 
-The fix involves:
-1. Finding the INSERT regex pattern in the parser
-2. Modifying it to optionally capture column list in parentheses
-3. Updating the INSERT command handler to use column list when provided
-4. Testing the new syntax works correctly
+### Tasks (9):
+1. [pending] P4: Implement Schema Caching in Database Class
+   ID: 1784454277.0019202
 
-### Tasks (4):
-1. [pending] Find INSERT regex pattern in parser
-   ID: 1784437927.3966959
+2. [pending] P1: Add Primary Key Fast Path to SELECT
+   ID: 1784454277.0021002
 
-2. [pending] Modify INSERT regex to support optional column list
-   ID: 1784437929.7024953
+3. [pending] P2: Add Primary Key Fast Path to UPDATE and DELETE
+   ID: 1784454277.0402982
 
-3. [pending] Update InsertCommand to handle column list
-   ID: 1784437931.5895953
+4. [pending] P3: Implement WriteBatch for Transaction Commits
+   ID: 1784454277.0404258
 
-4. [pending] Test INSERT with column list syntax
-   ID: 1784437933.5303857
+5. [pending] P10: Implement UPSERT Command
+   ID: 1784454277.0405366
+
+6. [pending] P11: Implement BATCH UPDATE Command
+   ID: 1784454277.0406582
+
+7. [pending] P5: Implement Async Binlog Writes
+   ID: 1784454277.040774
+
+8. [pending] P6: Add Index-Based WHERE Lookups
+   ID: 1784454277.0409012
+
+9. [pending] Run Performance Benchmarks and Verify Improvements
+   ID: 1784454277.0410223
 
 ---
 

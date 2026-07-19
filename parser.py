@@ -25,6 +25,10 @@ class CommandParser:
                 r'^\s*INSERT\s+INTO\s+(?P<table>\w+)(?:\s*\((?P<columns>[^)]+)\))?\s+VALUES\s*\((?P<values>[^)]+)\)\s*$',
                 re.IGNORECASE
             ),
+            'UPSERT': re.compile(
+                r'^\s*UPSERT\s+INTO\s+(?P<table>\w+)(?:\s*\((?P<columns>[^)]+)\))?\s+VALUES\s*\((?P<values>[^)]+)\)\s*$',
+                re.IGNORECASE
+            ),
             'SELECT': re.compile(
                 r'^\s*SELECT\s+(?P<columns>[\w\s*,]+)\s+FROM\s+(?P<table>\w+)'
                 r'(?:\s+WHERE\s+(?P<where>.+?))?'
@@ -33,6 +37,10 @@ class CommandParser:
             ),
             'UPDATE': re.compile(
                 r'^\s*UPDATE\s+(?P<table>\w+)\s+SET\s+(?P<set>.+?)(?:\s+WHERE\s+(?P<where>.+))?\s*$',
+                re.IGNORECASE
+            ),
+            'BATCH_UPDATE': re.compile(
+                r'^\s*BATCH\s+UPDATE\s+(?P<table>\w+)\s+SET\s+(?P<set>.+?)\s+WHERE\s+(?P<where_col>\w+)\s+IN\s*\((?P<where_values>[^)]+)\)\s*$',
                 re.IGNORECASE
             ),
             'DELETE': re.compile(
