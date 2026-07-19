@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-07-19 — v2.3.2
+
+### Auto: Version v2.3.2
+
+- Version auto-incremented from v2.3.1
+- Files changed: AUTOVERSION.py, HISTORY.md, PROJECT.md, __pycache__/AUTOVERSION.cpython-314.pyc, __pycache__/commands.cpython-314.pyc, __pycache__/server.cpython-314.pyc, background.log, cli.py, commands.py, server.py, state.aiia, terminal_audit.log
+
+---
+
+
 All notable changes to the KosDB project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),

@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 """
 LevelDB Socket Server - Interactive CLI Client
@@ -11,8 +12,19 @@ Features:
 - Multi-command batch support with semicolon separation
 """
 
+# Auto-version - increments automatically via git pre-commit hook
+try:
+    from AUTOVERSION import VERSION as __version__
+except ImportError:
+    __version__ = "2.3.0"
+
 import socket
 import sys
+import os
+import argparse
+import getpass
+import json
+import re
 import os
 import argparse
 import getpass
