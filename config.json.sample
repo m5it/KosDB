@@ -1,8 +1,7 @@
-
 {
   "version": "2.3.0",
   "host": "0.0.0.0",
-  "port": 9999,
+  "port": 5556,
   "data_dir": "./data",
   "max_connections": 100,
   "connection_timeout": 30,
@@ -17,11 +16,6 @@
     "continue_on_error": true,
     "transaction_support": true
   },
-    "data_dir": "./data",
-    "max_connections": 100,
-    "connection_timeout": 30,
-    "request_timeout": 60
-  },
   "tls": {
     "enabled": false,
     "cert_file": "./certs/server.crt",
@@ -35,25 +29,6 @@
     "max_size": 1000,
     "default_ttl": 300,
     "invalidate_on_write": true
-  },
-  "gpu": {
-    "enabled": false,
-    "device_id": 0,
-    "memory_limit_mb": null,
-    "batch_size": 1000,
-    "use_mixed_precision": false
-  },
-  "fulltext": {
-    "enabled": true,
-    "stem": true,
-    "min_token_length": 2,
-    "custom_stop_words": []
-  },
-  "vector_search": {
-    "enabled": true,
-    "default_dimension": 384,
-    "metric": "cosine",
-    "use_gpu": true
   },
   "replication": {
     "enabled": false,
