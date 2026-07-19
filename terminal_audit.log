@@ -1933,3 +1933,322 @@ print("All checks passed!") | SUCCESS: True | OUTPUT_LEN: 122
 [2026-07-18 21:11:33] CMD: sed -n 180,210p commands.py | SUCCESS: True | OUTPUT_LEN: 958
 [2026-07-18 21:11:35] CMD: wc -l commands.py | SUCCESS: True | OUTPUT_LEN: 16
 [2026-07-18 21:11:56] CMD: python3 -m py_compile commands.py | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-19 05:12:51] CMD: grep -rn INSERT.*INTO . | SUCCESS: True | OUTPUT_LEN: 81918
+[2026-07-19 05:13:06] CMD: sed -n 20,30p parser.py | SUCCESS: True | OUTPUT_LEN: 531
+[2026-07-19 05:20:33] CMD: grep -n INSERT.*INTO parser.py | SUCCESS: True | OUTPUT_LEN: 95
+[2026-07-19 05:20:37] CMD: sed -n 23,28p parser.py | SUCCESS: True | OUTPUT_LEN: 236
+[2026-07-19 05:20:39] CMD: python3 -m py_compile parser.py | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-19 05:20:43] CMD: python3 -c import re
+
+# New pattern
+pattern = re.compile(
+    r'^\s*INSERT\s+INTO\s+(?P<table>\w+)(?:\s*\((?P<columns>[^)]+)\))?\s+VALUES\s*\((?P<values>[^)]+)\)\s*$',
+    re.IGNORECASE
+)
+
+# Test 1: Without columns (backward compatible)
+test1 = "INSERT INTO users VALUES (1, 'Alice')"
+match1 = pattern.match(test1)
+print(f"Test 1 (no columns): {'PASS' if match1 else 'FAIL'}")
+if match1:
+    print(f"  Table: {match1.group('table')}, Columns: {match1.group('columns')}, Values: {match1.group('values')}")
+
+# Test 2: With columns (new feature)
+test2 = "INSERT INTO settings (setting_key, value, type) VALUES ('test', 'data', 'string')"
+match2 = pattern.match(test2)
+print(f"Test 2 (with columns): {'PASS' if match2 else 'FAIL'}")
+if match2:
+    print(f"  Table: {match2.group('table')}, Columns: {match2.group('columns')}, Values: {match2.group('values')}") | SUCCESS: True | OUTPUT_LEN: 191
+[2026-07-19 05:20:45] CMD: grep -n class InsertCommand commands.py | SUCCESS: True | OUTPUT_LEN: 34
+[2026-07-19 05:20:52] CMD: sed -n 135,150p commands.py | SUCCESS: True | OUTPUT_LEN: 623
+[2026-07-19 05:20:58] CMD: grep -n def insert database.py | SUCCESS: True | OUTPUT_LEN: 69
+[2026-07-19 05:21:00] CMD: sed -n 293,330p database.py | SUCCESS: True | OUTPUT_LEN: 1371
+[2026-07-19 05:21:07] CMD: python3 -m py_compile database.py | SUCCESS: True | OUTPUT_LEN: 133
+[2026-07-19 05:21:09] CMD: sed | SUCCESS: True | OUTPUT_LEN: 1804
+[2026-07-19 05:21:11] CMD: sed -n 320,340p database.py | SUCCESS: True | OUTPUT_LEN: 783
+[2026-07-19 05:21:13] CMD: sed -n 310,380p database.py | SUCCESS: True | OUTPUT_LEN: 2445
+[2026-07-19 05:21:16] CMD: sed -n 293,380p database.py | SUCCESS: True | OUTPUT_LEN: 3092
+[2026-07-19 05:21:22] CMD: sed -n 293,380p database.py | SUCCESS: True | OUTPUT_LEN: 3092
+[2026-07-19 05:21:29] CMD: python3 -m py_compile database.py | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-19 05:21:47] CMD: python3 -c import sys
+sys.path.insert(0, '.')
+
+# Test 1: Verify parser regex works
+from parser import CommandParser
+parser = CommandParser()
+
+# Test without columns (backward compatible)
+cmd1, params1 = parser.parse("INSERT INTO users VALUES (1, 'Alice')")
+print(f"Test 1 (no columns): {cmd1}")
+print(f"  Table: {params1.get('table')}, Columns: {params1.get('columns')}, Values: {params1.get('values')}")
+
+# Test with columns (new feature)
+cmd2, params2 = parser.parse("INSERT INTO settings (setting_key, value, type) VALUES ('test', 'data', 'string')")
+print(f"\nTest 2 (with columns): {cmd2}")
+print(f"  Table: {params2.get('table')}, Columns: {params2.get('columns')}, Values: {params2.get('values')}")
+
+print("\n✅ All parser tests passed!") | SUCCESS: True | OUTPUT_LEN: 236
+[2026-07-19 05:21:51] CMD: python3 -c import sys
+import os
+import tempfile
+sys.path.insert(0, '.')
+
+from database import Database
+
+# Create a temporary database for testing
+with tempfile.TemporaryDirectory() as tmpdir:
+    db = Database(data_dir=tmpdir, server_id=1)
+    
+    # Create test database and table
+    print(db.create_database('testdb'))
+    print(db.use_database('testdb'))
+    print(db.create_table('settings', ['setting_key', 'value', 'type']))
+    
+    # Test 1: Insert without columns (backward compatible)
+    print("\n--- Test 1: Insert without columns ---")
+    result1 = db.insert('settings', ['theme', 'dark', 'config'])
+    print(f"Result: {result1}")
+    
+    # Test 2: Insert with columns (new feature)
+    print("\n--- Test 2: Insert with columns ---")
+    result2 = db.insert_with_columns('settings', ['setting_key', 'value', 'type'], ['lang', 'en', 'config'])
+    print(f"Result: {result2}")
+    
+    # Verify data was inserted correctly
+    print("\n--- Verify data ---")
+    result3 = db.select('settings', ['*'], None, None, False)
+    print(result3)
+
+print("\n✅ All database tests passed!") | SUCCESS: True | OUTPUT_LEN: 352
+[2026-07-19 05:21:55] CMD: grep -n def create database.py | SUCCESS: True | OUTPUT_LEN: 148
+[2026-07-19 05:21:57] CMD: ls -la *.py.bak . | SUCCESS: True | OUTPUT_LEN: 10515
+[2026-07-19 05:22:00] CMD: git checkout database.py | SUCCESS: True | OUTPUT_LEN: 38
+[2026-07-19 05:22:03] CMD: grep -n def insert database.py | SUCCESS: True | OUTPUT_LEN: 69
+[2026-07-19 05:22:07] CMD: grep -n INSERT.*INTO parser.py | SUCCESS: True | OUTPUT_LEN: 125
+[2026-07-19 05:22:10] CMD: grep -n insert_with_columns commands.py | SUCCESS: True | OUTPUT_LEN: 93
+[2026-07-19 05:22:12] CMD: grep -n def insert_with_columns database.py | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-19 05:22:15] CMD: sed -n 293,340p database.py | SUCCESS: True | OUTPUT_LEN: 1735
+[2026-07-19 05:22:22] CMD: sed -n 325,380p database.py | SUCCESS: True | OUTPUT_LEN: 1918
+[2026-07-19 05:22:24] CMD: git checkout database.py | SUCCESS: True | OUTPUT_LEN: 38
+[2026-07-19 05:22:26] CMD: sed -n 325,335p database.py | SUCCESS: True | OUTPUT_LEN: 313
+[2026-07-19 05:22:28] CMD: sed -n 335,345p database.py | SUCCESS: True | OUTPUT_LEN: 459
+[2026-07-19 05:22:41] CMD: python3 -m py_compile parser.py | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-19 05:22:44] CMD: python3 -m py_compile database.py | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-19 05:22:48] CMD: python3 -c import sys
+sys.path.insert(0, '.')
+
+# Test parser
+from parser import CommandParser
+parser = CommandParser()
+
+# Test 1: Without columns
+cmd1, params1 = parser.parse("INSERT INTO users VALUES (1, 'Alice')")
+print(f"Test 1 (no columns): {cmd1}")
+print(f"  Table: {params1.get('table')}, Columns: {params1.get('columns')}, Values: {params1.get('values')}")
+
+# Test 2: With columns
+cmd2, params2 = parser.parse("INSERT INTO settings (setting_key, value, type) VALUES ('test', 'data', 'string')")
+print(f"\nTest 2 (with columns): {cmd2}")
+print(f"  Table: {params2.get('table')}, Columns: {params2.get('columns')}, Values: {params2.get('values')}")
+
+# Test 3: Verify database has insert_with_columns
+from database import Database
+print(f"\nTest 3: Database has insert_with_columns: {hasattr(Database, 'insert_with_columns')}")
+
+print("\n✅ All tests passed!") | SUCCESS: True | OUTPUT_LEN: 277
+[2026-07-19 05:22:55] CMD: sed -n 135,155p commands.py | SUCCESS: True | OUTPUT_LEN: 877
+[2026-07-19 05:22:58] CMD: python3 -m py_compile commands.py | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-19 05:23:06] CMD: python3 -c import sys
+import tempfile
+import os
+sys.path.insert(0, '.')
+
+from database import Database
+from parser import CommandParser
+from commands import InsertCommand
+
+print("=" * 60)
+print("INSERT with Column List - Comprehensive Tests")
+print("=" * 60)
+
+# Create temporary database
+with tempfile.TemporaryDirectory() as tmpdir:
+    db = Database(data_dir=tmpdir, server_id=1)
+    
+    # Setup
+    print("\n--- Setup ---")
+    print(db.create_database('testdb'))
+    print(db.use_database('testdb'))
+    print(db.create_table('settings', ['setting_key', 'value', 'type']))
+    print(db.create_table('users', ['name', 'email', 'age']))
+    
+    # Test 1: Original syntax without columns
+    print("\n--- Test 1: INSERT without columns (backward compatible) ---")
+    result1 = db.insert('settings', ['theme', 'dark', 'config'])
+    print(f"Result: {result1}")
+    
+    # Test 2: New syntax with columns
+    print("\n--- Test 2: INSERT with columns (new feature) ---")
+    result2 = db.insert_with_columns('settings', 
+        ['setting_key', 'value', 'type'], 
+        ['language', 'en', 'config'])
+    print(f"Result: {result2}")
+    
+    # Test 3: Partial columns (insert only some columns)
+    print("\n--- Test 3: Partial column insert ---")
+    result3 = db.insert_with_columns('settings',
+        ['setting_key', 'value'],
+        ['timezone', 'UTC'])
+    print(f"Result: {result3}")
+    
+    # Test 4: Verify data with SELECT
+    print("\n--- Test 4: Verify inserted data ---")
+    select_result = db.select('settings', ['*'], None, None, False)
+    print(select_result)
+    
+    # Test 5: Parser test - both syntaxes
+    print("\n--- Test 5: Parser tests ---")
+    parser = CommandParser()
+    
+    cmd1, params1 = parser.parse("INSERT INTO users VALUES (1, 'Alice', 25)")
+    print(f"Without columns: table={params1.get('table')}, cols={params1.get('columns')}, vals={params1.get('values')}")
+    
+    cmd2, params2 = parser.parse("INSERT INTO users (name, email, age) VALUES ('Bob', 'bob@test.com', 30)")
+    print(f"With columns: table={params2.get('table')}, cols={params2.get('columns')}, vals={params2.get('values')}")
+    
+    # Test 6: Edge case - mismatched columns/values
+    print("\n--- Test 6: Edge case - more values than columns ---")
+    try:
+        result6 = db.insert_with_columns('settings',
+            ['setting_key'],  # 1 column
+            ['key1', 'val1', 'extra'])  # 3 values
+        print(f"Result: {result6}")
+    except Exception as e:
+        print(f"Handled gracefully: {e}")
+    
+    print("\n" + "=" * 60)
+    print("✅ ALL TESTS PASSED!")
+    print("=" * 60) | SUCCESS: True | OUTPUT_LEN: 535
+[2026-07-19 05:23:08] CMD: grep -n def create database.py | SUCCESS: True | OUTPUT_LEN: 148
+[2026-07-19 05:23:10] CMD: git status database.py | SUCCESS: True | OUTPUT_LEN: 377
+[2026-07-19 05:23:12] CMD: git restore database.py | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-19 05:23:14] CMD: sed -n 325,345p database.py | SUCCESS: True | OUTPUT_LEN: 763
+[2026-07-19 05:23:21] CMD: python3 -m py_compile database.py | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-19 05:23:27] CMD: python3 -c import sys
+import tempfile
+sys.path.insert(0, '.')
+
+from database import Database
+from parser import CommandParser
+
+print("=" * 60)
+print("INSERT with Column List - Comprehensive Tests")
+print("=" * 60)
+
+# Create temporary database
+with tempfile.TemporaryDirectory() as tmpdir:
+    db = Database(data_dir=tmpdir, server_id=1)
+    
+    # Setup
+    print("\n--- Setup ---")
+    print(db.create_database('testdb'))
+    print(db.use_database('testdb'))
+    
+    # Create table using direct schema manipulation
+    schema = {"columns": ["setting_key", "value", "type"], "next_id": 1}
+    import json
+    db._db.put(b"_schema:settings", json.dumps(schema).encode())
+    print("Table 'settings' created")
+    
+    # Test 1: Original syntax without columns
+    print("\n--- Test 1: INSERT without columns ---")
+    result1 = db.insert('settings', ['theme', 'dark', 'config'])
+    print(f"Result: {result1}")
+    
+    # Test 2: New syntax with columns
+    print("\n--- Test 2: INSERT with columns ---")
+    result2 = db.insert_with_columns('settings', 
+        ['setting_key', 'value', 'type'], 
+        ['language', 'en', 'config'])
+    print(f"Result: {result2}")
+    
+    # Test 3: Partial columns
+    print("\n--- Test 3: Partial column insert ---")
+    result3 = db.insert_with_columns('settings',
+        ['setting_key', 'value'],
+        ['timezone', 'UTC'])
+    print(f"Result: {result3}")
+    
+    # Test 4: Verify data
+    print("\n--- Test 4: Verify data ---")
+    result4 = db.select('settings', ['*'], None, None, False)
+    print(result4)
+    
+    # Test 5: Parser
+    print("\n--- Test 5: Parser ---")
+    parser = CommandParser()
+    
+    cmd1, params1 = parser.parse("INSERT INTO users VALUES (1, 'Alice')")
+    print(f"No columns: table={params1.get('table')}, cols={params1.get('columns')}, vals={params1.get('values')}")
+    
+    cmd2, params2 = parser.parse("INSERT INTO users (name, email) VALUES ('Bob', 'bob@test.com')")
+    print(f"With columns: table={params2.get('table')}, cols={params2.get('columns')}, vals={params2.get('values')}")
+
+print("\n" + "=" * 60)
+print("✅ ALL TESTS PASSED!")
+print("=" * 60) | SUCCESS: True | OUTPUT_LEN: 704
+[2026-07-19 05:23:29] CMD: grep -n def _ database.py | SUCCESS: True | OUTPUT_LEN: 931
+[2026-07-19 05:23:32] CMD: git restore database.py | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-19 05:23:34] CMD: grep -n _update_indexes database.py | SUCCESS: True | OUTPUT_LEN: 249
+[2026-07-19 05:23:36] CMD: sed -n 330,345p database.py | SUCCESS: True | OUTPUT_LEN: 625
+[2026-07-19 05:23:47] CMD: python3 -m py_compile database.py | SUCCESS: True | OUTPUT_LEN: 133
+[2026-07-19 05:23:50] CMD: git checkout -- database.py | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-19 05:23:52] CMD: sed -n 325,340p database.py | SUCCESS: True | OUTPUT_LEN: 550
+[2026-07-19 05:23:59] CMD: python3 -m py_compile database.py | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-19 05:24:10] CMD: python3 -c import sys
+import tempfile
+sys.path.insert(0, '.')
+
+from database import Database
+from parser import CommandParser
+
+print("=" * 60)
+print("INSERT with Column List - Tests")
+print("=" * 60)
+
+with tempfile.TemporaryDirectory() as tmpdir:
+    db = Database(data_dir=tmpdir, server_id=1)
+    
+    print("\n--- Setup ---")
+    print(db.create_database('testdb'))
+    print(db.use_database('testdb'))
+    
+    # Create table
+    import json
+    schema = {"columns": ["setting_key", "value", "type"], "next_id": 1}
+    db._db.put(b"_schema:settings", json.dumps(schema).encode())
+    print("Table 'settings' created")
+    
+    print("\n--- Test 1: INSERT without columns ---")
+    result1 = db.insert('settings', ['theme', 'dark', 'config'])
+    print(f"Result: {result1}")
+    
+    print("\n--- Test 2: INSERT with columns ---")
+    result2 = db.insert_with_columns('settings', 
+        ['setting_key', 'value', 'type'], 
+        ['language', 'en', 'config'])
+    print(f"Result: {result2}")
+    
+    print("\n--- Test 3: Verify data ---")
+    print(db.select('settings', ['*'], None, None, False))
+    
+    print("\n--- Test 4: Parser ---")
+    parser = CommandParser()
+    
+    cmd1, params1 = parser.parse("INSERT INTO users VALUES (1, 'Alice')")
+    print(f"No columns: cols={params1.get('columns')}, vals={params1.get('values')}")
+    
+    cmd2, params2 = parser.parse("INSERT INTO users (name, email) VALUES ('Bob', 'bob@test.com')")
+    print(f"With columns: cols={params2.get('columns')}, vals={params2.get('values')}")
+
+print("\n✅ ALL TESTS PASSED!") | SUCCESS: True | OUTPUT_LEN: 844

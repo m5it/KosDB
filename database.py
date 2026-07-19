@@ -333,8 +333,54 @@ class Database:
                 data={"row": row}
             )
         
+
         return f"Inserted 1 row into '{table_name}'"
     
+    def insert_with_columns(self, table_name: str, columns: List[str], values: List[Any]) -> str:
+        """Insert a row with explicit column mapping."""
+        if not self._db:
+            return "No database selected. Use USE <database>"
+        
+        schema_key = f"_schema:{table_name}".encode()
+        schema_data = self._db.get(schema_key)
+        if not schema_data:
+            return f"Table '{table_name}' does not exist"
+        
+        schema = json.loads(schema_data.decode())
+        row_id = str(schema["next_id"])
+        
+        # Build row with explicit column mapping
+        row = {"id": row_id}
+        for i, col in enumerate(columns):
+            if i < len(values):
+                row[col] = values[i]
+        
+        primary_key = schema.get("primary_key")
+        if primary_key and primary_key in row:
+            store_key = str(row[primary_key])
+        else:
+            store_key = row_id
+        
+        key = self._make_key(table_name, store_key)
+        self._transaction_put(key, json.dumps(row).encode())
+        
+        self._update_indexes(table_name, row, store_key, schema)
+        
+        if not primary_key:
+            schema["next_id"] += 1
+            self._transaction_put(schema_key, json.dumps(schema).encode())
+        
+        # Log to binlog
+        if self._binlog:
+            self._binlog.write_entry(
+                server_id=self.server_id,
+                database=self.current_db or "",
+                operation="INSERT",
+                table=table_name,
+                data={"row": row}
+            )
+        
+        return f"Inserted 1 row into '{table_name}'"
     def _update_indexes(self, table_name: str, row: Dict, row_key: str, schema: Dict):
         """Update all indexes for a row."""
         primary_key = schema.get("primary_key")

@@ -20,8 +20,9 @@ class CommandParser:
                 r'^\s*DROP\s+TABLE\s+(?P<table>\w+)\s*$',
                 re.IGNORECASE
             ),
+
             'INSERT': re.compile(
-                r'^\s*INSERT\s+INTO\s+(?P<table>\w+)\s+VALUES\s*\((?P<values>[^)]+)\)\s*$',
+                r'^\s*INSERT\s+INTO\s+(?P<table>\w+)(?:\s*\((?P<columns>[^)]+)\))?\s+VALUES\s*\((?P<values>[^)]+)\)\s*$',
                 re.IGNORECASE
             ),
             'SELECT': re.compile(

@@ -132,6 +132,7 @@ class DropTableCommand(Command):
             return f"ERROR: {e}"
 
 
+
 class InsertCommand(Command):
     def execute(self, params, client_state):
         if not self.validate_params(params, ['table', 'values']):
@@ -139,7 +140,14 @@ class InsertCommand(Command):
         if not client_state.get('current_db'):
             return "ERROR: No database selected"
         try:
-            self.db.insert(params['table'], params['values'])
+            # Support optional column list: INSERT INTO table (col1, col2) VALUES (...)
+            columns = params.get('columns')
+            if columns:
+                # Parse columns and map to values
+                col_list = [c.strip() for c in columns.split(',')]
+                self.db.insert_with_columns(params['table'], col_list, params['values'])
+            else:
+                self.db.insert(params['table'], params['values'])
             return f"OK: Inserted into '{params['table']}'"
         except Exception as e:
             return f"ERROR: {e}"
