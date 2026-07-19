@@ -1,30 +1,29 @@
-# Plan: 
-## ID: 1784402244.3448973
-## Created: 2026-07-18 19:17:24
+# Plan: Fix INSERT Regex to Support Column Lists
+## ID: 1784437924.8390417
+## Created: 2026-07-19 05:12:04
 ## Status: in_progress
 
-### Tasks (6):
-1. [in_progress] Add threading.Lock to Database class and make use_database i
-   ID: 1784402248.6586328
-   Progress logs: 1 entries
+### Goal:
+The KosDB INSERT regex currently only supports `INSERT INTO table VALUES (...)` syntax. We need to extend it to also support `INSERT INTO table (col1, col2, ...) VALUES (...)` syntax that includes an optional column list before VALUES. This is needed because the admin API sends INSERT statements with explicit column lists like `INSERT INTO settings (setting_key, value, type) VALUES (...)`.
 
-2. [pending] Fix commands.py to properly extract row count from Database.
-   ID: 1784402316.3061907
+The fix involves:
+1. Finding the INSERT regex pattern in the parser
+2. Modifying it to optionally capture column list in parentheses
+3. Updating the INSERT command handler to use column list when provided
+4. Testing the new syntax works correctly
 
-3. [pending] Test concurrent USE commands and UPDATE operations to ensure
-   ID: 1784402321.5758688
+### Tasks (4):
+1. [pending] Find INSERT regex pattern in parser
+   ID: 1784437927.3966959
 
-4. [pending] 1. Read database.py to find the __init__ method
-2. Add 'impo
-   ID: 1784402398.007911
+2. [pending] Modify INSERT regex to support optional column list
+   ID: 1784437929.7024953
 
-5. [pending] 1. In database.py, find the use_database method
-2. Add early
-   ID: 1784402402.2315657
+3. [pending] Update InsertCommand to handle column list
+   ID: 1784437931.5895953
 
-6. [pending] 1. Read commands.py to find UpdateCommand class
-2. Add 'impo
-   ID: 1784402406.8271616
+4. [pending] Test INSERT with column list syntax
+   ID: 1784437933.5303857
 
 ---
 
