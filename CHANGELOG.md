@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-07-19 — v2.3.3
+
+### Auto: Version v2.3.3
+
+- Version auto-incremented from v2.3.2
+- Files changed: HISTORY.md, KOSDB_PERFORMANCE.md, PLAN.md, __pycache__/commands.cpython-314.pyc, __pycache__/database.cpython-314.pyc, add_async_binlog.py, add_binlog_helper.py, add_binlog_worker.py, add_tradeoff_doc.py, apply_async_binlog.py, background.log, commands.py, current_task.txt, database.py, fix_binlog_ref.py, fix_binlog_startup.py, fix_commands.py, fix_parser.py, fix_upsert_values.py, fix_worker_bug.py, modify_log_binlog.py, parser.py, plans/1784454267.3777697.json, register_batch_update.py, replace_binlog_calls.py, state.aiia, terminal_audit.log, test_async_binlog2.py, test_async_binlog3.py, test_async_binlog_final.py, test_batch_update.py, test_upsert.py
+
+---
+
+
 ## 2026-07-19 — v2.3.2
 
 ### Auto: Version v2.3.2
