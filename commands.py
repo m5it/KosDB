@@ -143,15 +143,15 @@ class InsertCommand(Command):
             # Support optional column list: INSERT INTO table (col1, col2) VALUES (...)
             columns = params.get('columns')
             if columns:
-                # Parse columns and map to values
-                col_list = [c.strip() for c in columns.split(',')]
-                self.db.insert_with_columns(params['table'], col_list, params['values'])
+                # Columns already parsed as list by parser
+                self.db.insert_with_columns(params['table'], columns, params['values'])
             else:
                 self.db.insert(params['table'], params['values'])
             return f"OK: Inserted into '{params['table']}'"
         except Exception as e:
             return f"ERROR: {e}"
 
+            return f"ERROR: {e}"
 
 class SelectCommand(Command):
     def execute(self, params, client_state):

@@ -2,12 +2,34 @@
 #!/usr/bin/env python3
 """
 LevelDB Socket Server with Database-Driven Authentication, Replication, and TLS Encryption
-KosDB v2.3.0 - Multi-Command Batch Execution Support
+KosDB - Multi-Command Batch Execution Support
 """
 
-__version__ = "2.3.0"
+# Auto-version - increments automatically via git pre-commit hook
+try:
+    from AUTOVERSION import VERSION as __version__
+except ImportError:
+    __version__ = "2.3.0"
 
 import sys
+import os
+import socket
+import threading
+import json
+import logging
+import hashlib
+import ssl
+import re
+import time
+import argparse
+from datetime import datetime
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from tls_wrapper import TLSConfig, TLSSocketWrapper, generate_self_signed_cert
+from parser import BackupRestoreParser
+from commands import CommandRegistry
+from database import Database
+from auth import Authenticator
 import os
 import socket
 import threading

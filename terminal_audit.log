@@ -2252,3 +2252,91 @@ with tempfile.TemporaryDirectory() as tmpdir:
     print(f"With columns: cols={params2.get('columns')}, vals={params2.get('values')}")
 
 print("\n✅ ALL TESTS PASSED!") | SUCCESS: True | OUTPUT_LEN: 844
+[2026-07-19 05:37:47] CMD: sed -n 190,200p parser.py | SUCCESS: True | OUTPUT_LEN: 581
+[2026-07-19 05:37:50] CMD: sed -n 145,152p commands.py | SUCCESS: True | OUTPUT_LEN: 405
+[2026-07-19 05:37:56] CMD: python3 -m py_compile commands.py | SUCCESS: True | OUTPUT_LEN: 86
+[2026-07-19 05:37:59] CMD: sed -n 140,160p commands.py | SUCCESS: True | OUTPUT_LEN: 871
+[2026-07-19 05:38:01] CMD: git checkout -- commands.py | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-19 05:38:04] CMD: sed -n 135,155p commands.py | SUCCESS: True | OUTPUT_LEN: 877
+[2026-07-19 05:38:09] CMD: sed -n 145,155p commands.py | SUCCESS: True | OUTPUT_LEN: 454
+[2026-07-19 05:38:11] CMD: git checkout -- commands.py | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-19 05:38:57] CMD: sed -n 143,155p commands.py | SUCCESS: True | OUTPUT_LEN: 572
+[2026-07-19 05:39:03] CMD: sed -n 145,155p commands.py | SUCCESS: True | OUTPUT_LEN: 431
+[2026-07-19 05:39:08] CMD: sed -n 143,160p commands.py | SUCCESS: True | OUTPUT_LEN: 760
+[2026-07-19 05:39:13] CMD: git checkout -- commands.py | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-19 05:39:41] CMD: python3 -m py_compile commands.py | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-19 05:39:43] CMD: sed -n 143,155p commands.py | SUCCESS: True | OUTPUT_LEN: 546
+[2026-07-19 05:39:48] CMD: python3 -m py_compile commands.py | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-19 05:39:52] CMD: python3 -c import sys
+import tempfile
+sys.path.insert(0, '.')
+
+from database import Database
+from parser import CommandParser
+from commands import InsertCommand, CommandRegistry
+
+print("=" * 60)
+print("Testing Fix: columns already parsed as list")
+print("=" * 60)
+
+with tempfile.TemporaryDirectory() as tmpdir:
+    db = Database(data_dir=tmpdir, server_id=1)
+    
+    # Setup
+    print(db.create_database('testdb'))
+    print(db.use_database('testdb'))
+    
+    # Create table
+    import json
+    schema = {"columns": ["setting_key", "value", "type"], "next_id": 1}
+    db._db.put(b"_schema:settings", json.dumps(schema).encode())
+    print("Table 'settings' created")
+    
+    # Test with columns (parser already converts to list)
+    print("\n--- Test: INSERT with columns ---")
+    parser = CommandParser()
+    cmd, params = parser.parse("INSERT INTO settings (setting_key, value, type) VALUES ('lang', 'en', 'config')")
+    print(f"Command: {cmd}")
+    print(f"Columns type: {type(params['columns'])}")
+    print(f"Columns value: {params['columns']}")
+    
+    # Execute via InsertCommand
+    registry = CommandRegistry(db)
+    insert_cmd = registry.get('INSERT')
+    result = insert_cmd.execute(params, {'current_db': 'testdb'})
+    print(f"Result: {result}")
+    
+    # Verify data
+    print("\n--- Verify data ---")
+    print(db.select('settings', ['*'], None, None, False))
+
+print("\n" + "=" * 60)
+print("✅ FIX VERIFIED - No 'list' object has no attribute 'split' error!")
+print("=" * 60) | SUCCESS: True | OUTPUT_LEN: 841
+[2026-07-19 05:39:55] CMD: rm commands_fix.py | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-19 05:42:19] CMD: ls -la ../KosCMS/ | SUCCESS: True | OUTPUT_LEN: 9277
+[2026-07-19 05:42:24] CMD: cat ../KosCMS/.git/hooks/pre-commit | SUCCESS: True | OUTPUT_LEN: 72
+[2026-07-19 05:42:26] CMD: ls -la ../KosCMS/hooks/ | SUCCESS: True | OUTPUT_LEN: 151
+[2026-07-19 05:42:30] CMD: cat ../KosCMS/hooks/pre-commit | SUCCESS: True | OUTPUT_LEN: 2142
+[2026-07-19 05:42:34] CMD: grep -r 2.3.0\|version config.json | SUCCESS: True | OUTPUT_LEN: 47
+[2026-07-19 05:42:47] CMD: chmod +x .git/hooks/pre-commit | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-19 05:42:50] CMD: sed -n 1,30p server.py | SUCCESS: True | OUTPUT_LEN: 655
+[2026-07-19 05:43:06] CMD: sed -n 25,35p server.py | SUCCESS: True | OUTPUT_LEN: 304
+[2026-07-19 05:43:09] CMD: git checkout -- server.py | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-19 05:43:15] CMD: python3 -m py_compile server.py | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-19 05:43:18] CMD: sed -n 1,20p cli.py | SUCCESS: True | OUTPUT_LEN: 487
+[2026-07-19 05:43:26] CMD: python3 AUTOVERSION.py | SUCCESS: True | OUTPUT_LEN: 26
+[2026-07-19 05:43:42] CMD: ls -la AUTOVERSION.py .git/hooks/pre-commit | SUCCESS: True | OUTPUT_LEN: 110
+[2026-07-19 05:43:44] CMD: ls -la AUTOVERSION.py | SUCCESS: True | OUTPUT_LEN: 55
+[2026-07-19 05:43:54] CMD: ls -la .git/hooks/pre-commit | SUCCESS: True | OUTPUT_LEN: 63
+[2026-07-19 05:43:57] CMD: python3 -c # Test version import in server.py
+import sys
+sys.path.insert(0, '.')
+exec(open('server.py').read().split('from tls_wrapper')[0])
+print(f"Server version: {__version__}") | SUCCESS: True | OUTPUT_LEN: 319
+[2026-07-19 05:44:00] CMD: python3 -c from AUTOVERSION import VERSION; print(f"Version: {VERSION}") | SUCCESS: True | OUTPUT_LEN: 15
+[2026-07-19 05:44:55] CMD: head -5 .git/hooks/pre-commit | SUCCESS: True | OUTPUT_LEN: 131
+[2026-07-19 05:44:57] CMD: file .git/hooks/pre-commit | SUCCESS: False | OUTPUT_LEN: 0
+[2026-07-19 05:44:59] CMD: cat .git/hooks/pre-commit | SUCCESS: True | OUTPUT_LEN: 2296
+[2026-07-19 05:45:02] CMD: rm .git/hooks/pre-commit | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-19 05:45:13] CMD: chmod +x .git/hooks/pre-commit | SUCCESS: True | OUTPUT_LEN: 0
