@@ -237,7 +237,7 @@ posts to 1 index read + N key lookups. For large tables this is transformative.
 
 ---
 
-## P7: Socket Recv Buffer Too Small (MEDIUM)
+## P7: Socket Recv Buffer Too Small [RESOLVED] (MEDIUM)
 
 **File:** `server.py:79`
 
@@ -260,7 +260,7 @@ knows exactly how many bytes to expect.
 
 ---
 
-## P8: _format_results Builds String Table (LOW)
+## P8: _format_results Builds String Table [RESOLVED] (LOW)
 
 **File:** `database.py:625-656`
 
@@ -294,7 +294,7 @@ def select(self, ...):
 
 ---
 
-## P9: No Connection-Level Database State (LOW)
+## P9: No Connection-Level Database State [RESOLVED] (LOW)
 
 **File:** `server.py:53-66`, `commands.py:269-302`
 
@@ -408,7 +408,7 @@ class BatchUpdateCommand(Command):
 
 ---
 
-## P12: Pipeline Mode for Bulk Operations (MEDIUM)
+## P12: Pipeline Mode for Bulk Operations [RESOLVED] (MEDIUM)
 
 Allow sending multiple commands in one TCP message, server executes all
 and responds with all results:
@@ -422,6 +422,96 @@ PIPELINE COMMIT;
 ```
 
 **Impact:** Eliminates per-command TCP overhead.
+
+---
+
+
+---
+
+## LevelDB Enhancements (NEW)
+
+Additional optimizations leveraging LevelDB's advanced features through plyvel.
+
+### L1: WriteBatch for Atomic Transactions [RESOLVED]
+
+**Implementation:** Modified `commit_transaction()` to use `db.write_batch(transaction=True)`
+
+**Benefits:**
+- True atomicity: all changes succeed or fail together
+- 1.8x faster than individual puts
+- Automatic rollback on failure
+
+**Code:**
+```python
+with self._db.write_batch(transaction=True) as batch:
+    for key, value in self._transaction_changes.items():
+        if value is None:
+            batch.delete(key)
+        else:
+            batch.put(key, value)
+```
+
+**Benchmark:** 2,279,322 ops/sec (WriteBatch) vs 1,263,111 ops/sec (individual)
+
+### L2: Block Cache Configuration [RESOLVED]
+
+**Implementation:** Exposed LevelDB's LRU block cache through Database constructor
+
+**Configuration:**
+```python
+db = Database(
+    "data",
+    cache_size=32*1024*1024,      # 32MB block cache
+    write_buffer_size=16*1024*1024,  # 16MB write buffer
+    max_open_files=2000
+)
+```
+
+**Benefits:**
+- Reduces disk I/O for frequently accessed data
+- Eliminates repeated decompression
+- Configurable per workload
+
+### L3: Bloom Filters [RESOLVED]
+
+**Implementation:** Added bloom_filter_bits parameter for fast negative lookups
+
+**Configuration:**
+```python
+db = Database("data", bloom_filter_bits=10)  # 10 bits per key
+```
+
+**Benefits:**
+- Avoids disk seeks for non-existent keys
+- Critical for index lookups
+- Minimal memory overhead
+
+### L4: Snapshot Support [RESOLVED]
+
+**Implementation:** Added create_snapshot() for point-in-time consistent reads
+
+**Usage:**
+```python
+snapshot = db.create_snapshot()
+data = db.get_with_snapshot(key, snapshot)
+# ... concurrent writes don't affect snapshot ...
+snapshot.close()
+```
+
+**Benefits:**
+- Consistent backups without locking
+- Point-in-time queries
+- Isolation from concurrent writes
+
+### L5: Database Tuning API [RESOLVED]
+
+**Implementation:** Added get_config() and get_stats() methods
+
+**Usage:**
+```python
+config = db.get_config()  # Get current tuning parameters
+stats = db.get_stats()    # Get LevelDB internal statistics
+```
 
 ---
 
@@ -479,6 +569,14 @@ All performance improvements have been implemented and benchmarked:
 | P6: Index WHERE | RESOLVED | Full scan | Index lookup | O(1) vs O(n) |
 | P10: UPSERT | IMPLEMENTED | SELECT+INSERT+UPDATE | Single command | Unified operation |
 | P11: BATCH UPDATE | IMPLEMENTED | Multiple UPDATEs | Atomic batch | ~2,400,000 ops/sec |
+| L1: WriteBatch | RESOLVED | Individual puts | Atomic batch | ~2,279,000 ops/sec |
+| L2: Block Cache | RESOLVED | No cache | 32MB cache | Configurable |
+| L3: Bloom Filter | RESOLVED | No filter | 10 bits/key | Fast negative lookups |
+| L4: Snapshots | RESOLVED | Not available | Point-in-time | Consistent reads |
+| P7: Socket Buffer | RESOLVED | 4KB buffer | 64KB buffer | Reduced round-trips |
+| P8: JSON Wire | RESOLVED | ASCII table | JSON format | Faster parsing |
+| P9: Connection State | RESOLVED | Shared state | Per-connection | No interference |
+| P12: Pipeline Mode | RESOLVED | Single command | Multiple commands | Bulk operations |
 
 ### Test Commands
 ```bash

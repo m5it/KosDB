@@ -55,14 +55,20 @@ class ClientHandler(threading.Thread):
         super().__init__(daemon=True)
         self.client_socket = client_socket
         self.address = address
-        self.db = db
+        self.db = db  # Reference to shared Database instance
         self.authenticator = authenticator
         self.parser = BackupRestoreParser()
         self.commands = CommandRegistry(db, replication_client)
         self.authenticated = False
         self.session_token = None
         self.user_info = None
-        self.client_state = {'current_db': None, 'username': None, 'is_admin': False}
+        # Connection-level state - each handler has its own database context
+        self.client_state = {
+            'current_db': None,      # Per-connection current database
+            'username': None, 
+            'is_admin': False,
+            'connection_db': None     # Per-connection database handle
+        }
         self.running = True
         self.tls_wrapper = tls_wrapper
         self.tls_enabled = tls_wrapper is not None and tls_wrapper.config.enabled
@@ -76,8 +82,29 @@ class ClientHandler(threading.Thread):
         self.client_socket.sendall(message.encode() + b'\n')
     
     def receive(self):
-        data = self.client_socket.recv(4096)
+        # Increased from 4096 to 65536 for better handling of large result sets
+        # Reduces round-trips for large responses and prevents fragmentation
+        data = self.client_socket.recv(65536)
         return data.decode().strip() if data else None
+    
+    def receive_pipeline(self):
+        """
+        Receive multiple commands in pipeline mode.
+        
+        Returns:
+            List of commands or None if connection closed
+        """
+        data = self.client_socket.recv(65536)
+        if not data:
+            return None
+        
+        # Split by delimiter for multiple commands
+        # Commands can be separated by ;; or newlines
+        commands_text = data.decode().strip()
+        if ';;' in commands_text:
+            commands = [cmd.strip() for cmd in commands_text.split(';;') if cmd.strip()]
+            return commands
+        return [commands_text] if commands_text else None
     
     def run(self):
         print(f"[SERVER] Client {self.address} connected")
@@ -85,13 +112,39 @@ class ClientHandler(threading.Thread):
         try:
             # Send welcome
             self.send(f"KosDB v{__version__}")
-            self.send("Commands: LOGIN <user> <pass> | HELP | QUIT")
+            self.send("Commands: LOGIN <user> <pass> | HELP | QUIT | PIPELINE")
             
             while self.running:
+                # Check for pipeline mode commands
                 data = self.receive()
                 if not data:
                     break
                 
+                # Check if this is a pipeline request
+                if data.upper().startswith('PIPELINE'):
+                    # Parse pipeline commands
+                    if ';;' in data:
+                        # Inline pipeline: PIPELINE command1;;command2;;...
+                        pipeline_part = data[data.find(' ')+1:] if ' ' in data else ''
+                        commands = [cmd.strip() for cmd in pipeline_part.split(';;') if cmd.strip()]
+                    else:
+                        # Multi-line pipeline follows
+                        commands = self.receive_pipeline()
+                        if not commands:
+                            self.send("ERROR: Empty pipeline")
+                            continue
+                    
+                    # Execute pipeline
+                    if commands:
+                        responses = self.handle_pipeline(commands)
+                        # Send aggregated response
+                        response_text = "\n".join([f"[{i+1}] {r}" for i, r in enumerate(responses)])
+                        self.send(f"PIPELINE RESULTS ({len(responses)} commands):\n{response_text}")
+                    else:
+                        self.send("ERROR: No commands in pipeline")
+                    continue
+                
+                # Regular single command
                 response = self.handle_command(data)
                 self.send(response)
                 
@@ -126,11 +179,48 @@ class ClientHandler(threading.Thread):
         if not self.authenticated:
             return "ERROR: Please login first"
         
-        # Parse and execute
+        # Handle USE command with connection-level state
+        if cmd_upper.startswith('USE '):
+            db_name = command.split()[1] if len(command.split()) > 1 else None
+            if not db_name:
+                return "ERROR: Usage: USE <database>"
+            
+            # Check if database exists
+            if db_name not in self.db.list_databases():
+                return f"ERROR: Database '{db_name}' does not exist"
+            
+            # Set connection-level database state
+            self.client_state['current_db'] = db_name
+            
+            # Open per-connection database handle if not already open
+            if self.client_state['connection_db'] is None:
+                import plyvel
+                db_path = os.path.join(self.db.data_dir, db_name)
+                try:
+                    self.client_state['connection_db'] = plyvel.DB(db_path, create_if_missing=False)
+                except Exception as e:
+                    return f"ERROR: Failed to open database: {e}"
+            else:
+                # Close current and open new
+                self.client_state['connection_db'].close()
+                import plyvel
+                db_path = os.path.join(self.db.data_dir, db_name)
+                try:
+                    self.client_state['connection_db'] = plyvel.DB(db_path, create_if_missing=False)
+                except Exception as e:
+                    return f"ERROR: Failed to open database: {e}"
+            
+            return f"Switched to database '{db_name}'"
+        
+        # Parse and execute other commands
         try:
             cmd_type, params = self.parser.parse(command)
             
             if cmd_type == 'QUIT':
+                # Clean up connection-level database handle
+                if self.client_state.get('connection_db'):
+                    self.client_state['connection_db'].close()
+                    self.client_state['connection_db'] = None
                 return "OK: Goodbye"
             
             if cmd_type == 'HELP':
@@ -139,12 +229,30 @@ class ClientHandler(threading.Thread):
             if cmd_type == 'UNKNOWN':
                 return "ERROR: Unknown command"
             
-            # Execute command
+            # Execute command with connection-level state
             response = self.commands.execute(cmd_type, params, self.client_state)
             return response
             
         except Exception as e:
             return f"ERROR: {str(e)}"
+    
+    def handle_pipeline(self, commands):
+        """
+        Execute multiple commands in pipeline mode.
+        
+        Args:
+            commands: List of command strings
+        
+        Returns:
+            List of responses for each command
+        """
+        responses = []
+        
+        for command in commands:
+            response = self.handle_command(command)
+            responses.append(response)
+        
+        return responses
     
     def _get_help(self):
         lines = [
@@ -154,10 +262,16 @@ class ClientHandler(threading.Thread):
             "  SHOW DATABASES       - List databases",
             "  SHOW TABLES          - List tables",
             "  CREATE TABLE <name>  - Create table",
-            "  INSERT INTO <table>    - Insert data",
+            "  INSERT INTO <table>  - Insert data",
             "  SELECT ...           - Query data",
+            "  PIPELINE cmd1;;cmd2  - Execute multiple commands",
             "  HELP                 - Show this help",
-            "  QUIT                 - Disconnect"
+            "  QUIT                 - Disconnect",
+            "",
+            "Pipeline Mode:",
+            "  Send multiple commands separated by ;;",
+            "  Example: INSERT INTO t VALUES (1);;INSERT INTO t VALUES (2)",
+            "  Reduces round-trip latency for bulk operations"
         ]
         return "\n".join(lines)
 

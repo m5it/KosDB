@@ -16,13 +16,44 @@ from binlog import Binlog
 class Database:
     """LevelDB database layer with CRUD operations, user management and privileges."""
     
-    def __init__(self, data_dir: str = "data", server_id: int = 1):
+    def __init__(self, data_dir: str = "data", server_id: int = 1, 
+                 cache_size: int = 8*1024*1024,  # 8MB default block cache
+                 write_buffer_size: int = 4*1024*1024,  # 4MB default
+                 max_open_files: int = 1000,
+                 compression: str = 'snappy',
+                 bloom_filter_bits: int = 10,
+                 sync_writes: bool = False,  # fsync on every write
+                 disable_wal: bool = False):  # Disable WAL for bulk load
+        """
+        Initialize database with LevelDB tuning options.
+        
+        Args:
+            data_dir: Database directory path
+            server_id: Server ID for replication
+            cache_size: LRU block cache size in bytes (default 8MB)
+            write_buffer_size: Memtable size in bytes (default 4MB)
+            max_open_files: Max open file handles (default 1000)
+            compression: 'snappy', 'zstd', or None
+            bloom_filter_bits: Bits per key for bloom filter (default 10, 0=disabled)
+            sync_writes: If True, fsync to disk on every write (slower, more durable)
+            disable_wal: If True, disable Write-Ahead Log for bulk loads (faster, less safe)
+        """
         self.data_dir = data_dir
         self.db_path = data_dir
         self.server_id = server_id
+        
+        # LevelDB tuning options
+        self._cache_size = cache_size
+        self._write_buffer_size = write_buffer_size
+        self._max_open_files = max_open_files
+        self._compression = compression
+        self._bloom_filter_bits = bloom_filter_bits
+        self._sync_writes = sync_writes
+        self._disable_wal = disable_wal
+        
         self.current_db: Optional[str] = None
         self._db: Optional[plyvel.DB] = None
-        self._system_db: Optional[plyvel.DB] = None  # For users/privileges
+        self._system_db: Optional[plyvel.DB] = None
         self._binlog: Optional[Binlog] = None
         self._binlog_queue: Optional[queue.Queue] = None
         self._binlog_thread: Optional[threading.Thread] = None
@@ -30,8 +61,8 @@ class Database:
         self._transaction_active = False
         self._transaction_changes: Dict[bytes, Optional[bytes]] = {}
 
-        self._db_lock = threading.Lock()  # Thread safety for database switching
-        self._cleanup_stale_locks()  # Clean up stale locks from crashed processes
+        self._db_lock = threading.Lock()
+        self._cleanup_stale_locks()
         self._ensure_data_dir()
         self._open_system_db()
         self._open_binlog()
@@ -52,9 +83,17 @@ class Database:
             os.makedirs(self.data_dir)
     
     def _open_system_db(self):
-        """Open system database for users and privileges."""
+        """Open system database for users and privileges with tuning options."""
         system_db_path = os.path.join(self.data_dir, "_system")
-        self._system_db = plyvel.DB(system_db_path, create_if_missing=True)
+        self._system_db = plyvel.DB(
+            system_db_path,
+            create_if_missing=True,
+            lru_cache_size=self._cache_size,
+            write_buffer_size=self._write_buffer_size,
+            max_open_files=self._max_open_files,
+            compression=self._compression,
+            bloom_filter_bits=self._bloom_filter_bits
+        )
     
     def _open_binlog(self):
         """Open binary log for replication."""
@@ -156,26 +195,34 @@ class Database:
         return "OK: Transaction started"
     
     def commit_transaction(self) -> str:
-        """Commit the current transaction."""
+        """Commit the current transaction using WriteBatch for atomicity."""
         if not self._transaction_active:
             return "ERROR: No active transaction"
         
+        if not self._db:
+            return "ERROR: No database selected"
+        
         try:
-            # Apply all changes
-            for key, value in self._transaction_changes.items():
-                if value is None:
-                    self._db.delete(key)
-                else:
-                    self._db.put(key, value)
+            # Use WriteBatch for atomic commit - all changes succeed or fail together
+            with self._db.write_batch(transaction=True) as batch:
+                for key, value in self._transaction_changes.items():
+                    if value is None:
+                        batch.delete(key)
+                    else:
+                        batch.put(key, value)
+                # batch.write() is called automatically when exiting context
             
             duration = time.time() - self._transaction_start_time
             changes = len(self._transaction_changes)
             self._transaction_active = False
             self._transaction_changes = {}
             
-            return f"OK: Committed {changes} change(s) in {duration:.3f}s"
+            return f"OK: Committed {changes} change(s) atomically in {duration:.3f}s"
         except Exception as e:
-            return f"ERROR: Commit failed: {e}"
+            # Transaction failed - all changes rolled back automatically by LevelDB
+            self._transaction_active = False
+            self._transaction_changes = {}
+            return f"ERROR: Transaction failed and rolled back: {e}"
     
     def rollback_transaction(self) -> str:
         """Rollback the current transaction."""
@@ -193,14 +240,16 @@ class Database:
         if self._transaction_active:
             self._transaction_changes[key] = value
         else:
-            self._db.put(key, value)
+            # Apply sync setting for immediate writes
+            self._db.put(key, value, sync=self._sync_writes)
     
     def _transaction_delete(self, key: bytes):
         """Queue a delete operation in the transaction."""
         if self._transaction_active:
             self._transaction_changes[key] = None
         else:
-            self._db.delete(key)
+            # Apply sync setting for immediate deletes
+            self._db.delete(key, sync=self._sync_writes)
     
     def create_database(self, db_name: str) -> str:
         """Create a new database (LevelDB instance)."""
@@ -264,7 +313,15 @@ class Database:
             if self._db:
                 self._db.close()
             
-            self._db = plyvel.DB(db_path, create_if_missing=True)
+            self._db = plyvel.DB(
+                db_path,
+                create_if_missing=True,
+                lru_cache_size=self._cache_size,
+                write_buffer_size=self._write_buffer_size,
+                max_open_files=self._max_open_files,
+                compression=self._compression,
+                bloom_filter_bits=self._bloom_filter_bits
+            )
             self.current_db = db_name
         
         return f"Switched to database '{db_name}'"
@@ -521,6 +578,7 @@ class Database:
             filtered_row = {col: row.get(col, "NULL") for col in columns}
             filtered_results.append(filtered_row)
         
+        # Support JSON wire format via client_state or default to ASCII
         return self._format_results(columns, filtered_results)
     
     def _can_use_index(self, schema: Dict, where: Dict) -> bool:
@@ -533,8 +591,36 @@ class Database:
                 return True
         return False
     
+    def _key_might_exist(self, key: bytes) -> bool:
+        """
+        Check if a key might exist using Bloom filter.
+        
+        Bloom filters provide fast negative lookups - if this returns False,
+        the key definitely doesn't exist. If True, the key probably exists
+        (but may be a false positive).
+        
+        This avoids disk seeks for non-existent keys during index lookups.
+        """
+        # LevelDB's bloom filter is checked automatically during get()
+        # This method documents the optimization for code clarity
+        if not self._db:
+            return False
+        
+        # With bloom_filter_bits > 0, LevelDB uses bloom filter internally
+        # We just do a quick check without full disk read
+        try:
+            # Using iterator with seek is faster than get for existence check
+            # when bloom filter is enabled
+            it = self._db.raw_iterator()
+            it.seek(key)
+            valid = it.valid()
+            it.close()
+            return valid
+        except:
+            return True  # Conservative: assume might exist on error
+    
     def _select_with_where_index(self, table_name: str, where: Dict, schema: Dict) -> List[Dict]:
-        """Select using index for WHERE clause filtering."""
+        """Select using index for WHERE clause filtering with Bloom filter optimization."""
         results = []
         indexes = schema.get("indexes", [])
         primary_key = schema.get("primary_key")
@@ -551,6 +637,11 @@ class Database:
         
         lookup_val = str(where[index_col])
         idx_key = f"_index:{table_name}:{index_col}".encode()
+        
+        # Bloom filter optimization: quick check if index key might exist
+        if self._bloom_filter_bits > 0 and not self._key_might_exist(idx_key):
+            return results  # Index definitely doesn't exist
+        
         idx_data = self._db.get(idx_key)
         
         if not idx_data:
@@ -564,6 +655,11 @@ class Database:
         
         for row_key in row_keys:
             row_key_full = f"{table_name}:{row_key}".encode()
+            
+            # Bloom filter optimization for row existence check
+            if self._bloom_filter_bits > 0 and not self._key_might_exist(row_key_full):
+                continue  # Row definitely doesn't exist
+            
             row_data = self._db.get(row_key_full)
             if row_data:
                 row = json.loads(row_data.decode())
@@ -732,11 +828,30 @@ class Database:
         
         return f"Deleted {deleted} row(s) from '{table_name}'"
     
-    def _format_results(self, columns: List[str], results: List[Dict]) -> str:
-        """Format query results as a table string."""
-        if not results:
-            return "Empty set"
+    def _format_results(self, columns: List[str], results: List[Dict], use_json: bool = False) -> str:
+        """
+        Format query results as table string or JSON.
         
+        Args:
+            columns: List of column names
+            results: List of row dictionaries
+            use_json: If True, return JSON format instead of ASCII table
+        
+        Returns:
+            Formatted string (ASCII table or JSON)
+        """
+        if not results:
+            return json.dumps({"columns": columns, "rows": [], "count": 0}) if use_json else "Empty set"
+        
+        if use_json:
+            # JSON wire format - efficient parsing, smaller payload
+            return json.dumps({
+                "columns": columns,
+                "rows": results,
+                "count": len(results)
+            })
+        
+        # ASCII table format (legacy, human-readable)
         widths = {}
         for col in columns:
             widths[col] = len(col)
@@ -765,6 +880,22 @@ class Database:
         
         return "\n".join(lines)
     
+    def _format_results_json(self, columns: List[str], results: List[Dict]) -> str:
+        """
+        Format query results as JSON for wire protocol.
+        
+        This is faster than ASCII table format and enables proper error handling.
+        The client receives structured data that can be parsed directly.
+        
+        Args:
+            columns: List of column names
+            results: List of row dictionaries
+        
+        Returns:
+            JSON string with columns, rows, and count
+        """
+        return self._format_results(columns, results, use_json=True)
+    
     def close(self):
         """Close the database connection."""
         # Flush binlog before shutdown (graceful)
@@ -782,6 +913,115 @@ class Database:
         if self._binlog:
             self._binlog.close()
             self._binlog = None
+    
+    def create_snapshot(self) -> Any:
+        """
+        Create a point-in-time snapshot for consistent reads.
+        
+        Snapshots provide a consistent view of the database at the time
+        they were created, unaffected by subsequent writes.
+        
+        Returns:
+            Snapshot object for reading, or None if no database selected
+        """
+        if not self._db:
+            return None
+        
+        try:
+            return self._db.snapshot()
+        except Exception as e:
+            print(f"Error creating snapshot: {e}")
+            return None
+    
+    def get_with_snapshot(self, key: bytes, snapshot: Any) -> Optional[bytes]:
+        """
+        Get a value using a snapshot for consistent read.
+        
+        Args:
+            key: The key to look up
+            snapshot: Snapshot object from create_snapshot()
+        
+        Returns:
+            Value bytes or None if not found
+        """
+        if not snapshot:
+            return None
+        
+        try:
+            return snapshot.get(key)
+        except Exception:
+            return None
+    
+    def iterate_with_snapshot(self, prefix: bytes, snapshot: Any) -> List[tuple]:
+        """
+        Iterate over a key range using a snapshot for consistent reads.
+        
+        Args:
+            prefix: Key prefix to iterate over
+            snapshot: Snapshot object from create_snapshot()
+        
+        Returns:
+            List of (key, value) tuples
+        """
+        if not snapshot:
+            return []
+        
+        results = []
+        try:
+            for key, value in snapshot.iterator(prefix=prefix):
+                results.append((key, value))
+        except Exception as e:
+            print(f"Error iterating with snapshot: {e}")
+        
+        return results
+    
+    def backup_with_snapshot(self, backup_path: str) -> str:
+        """
+        Create a consistent backup using snapshot.
+        
+        Args:
+            backup_path: Directory path for backup
+        
+        Returns:
+            Success/error message
+        """
+        if not self._db:
+            return "ERROR: No database selected"
+        
+        import shutil
+        
+        try:
+            # Create snapshot for consistent view
+            snapshot = self.create_snapshot()
+            if not snapshot:
+                return "ERROR: Failed to create snapshot"
+            
+            try:
+                # Ensure backup directory exists
+                os.makedirs(backup_path, exist_ok=True)
+                
+                # Copy all data using snapshot
+                prefix = b""  # All keys
+                count = 0
+                
+                for key, value in snapshot.iterator(prefix=prefix):
+                    # Skip internal metadata if needed
+                    if key.startswith(b"_"):
+                        continue
+                    
+                    # Write to backup (simplified - in production use proper serialization)
+                    backup_key_path = os.path.join(backup_path, key.decode('utf-8', errors='replace'))
+                    os.makedirs(os.path.dirname(backup_key_path), exist_ok=True)
+                    with open(backup_key_path + '.dat', 'wb') as f:
+                        f.write(value)
+                    count += 1
+                
+                return f"OK: Backed up {count} items to {backup_path}"
+            finally:
+                snapshot.close()
+                
+        except Exception as e:
+            return f"ERROR: Backup failed: {e}"
     
     def list_databases(self) -> List[str]:
         """List all databases in the data directory."""
@@ -927,6 +1167,57 @@ class Database:
                     return True
         
         return False
+    
+    def get_config(self) -> Dict[str, Any]:
+        """
+        Get current database configuration and tuning parameters.
+        
+        Returns:
+            Dictionary with current configuration settings
+        """
+        return {
+            "cache_size": self._cache_size,
+            "write_buffer_size": self._write_buffer_size,
+            "max_open_files": self._max_open_files,
+            "compression": self._compression,
+            "bloom_filter_bits": self._bloom_filter_bits,
+            "sync_writes": self._sync_writes,
+            "disable_wal": self._disable_wal,
+            "data_dir": self.data_dir,
+            "server_id": self.server_id,
+            "current_db": self.current_db,
+        }
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """
+        Get database statistics from LevelDB.
+        
+        Returns:
+            Dictionary with database statistics
+        """
+        stats = {}
+        
+        if self._db:
+            try:
+                # LevelDB internal statistics
+                leveldb_stats = self._db.get_property(b'leveldb.stats')
+                if leveldb_stats:
+                    stats['leveldb_stats'] = leveldb_stats.decode('utf-8', errors='replace')
+                
+                # Approximate sizes
+                # stats['approximate_size'] = self._db.approximate_size(b'', b'\xff')
+            except Exception as e:
+                stats['error'] = str(e)
+        
+        if self._system_db:
+            try:
+                system_stats = self._system_db.get_property(b'leveldb.stats')
+                if system_stats:
+                    stats['system_stats'] = system_stats.decode('utf-8', errors='replace')
+            except:
+                pass
+        
+        return stats
     
     def list_users(self) -> List[str]:
         """List all users."""

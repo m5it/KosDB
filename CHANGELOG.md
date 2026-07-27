@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-07-27 — v2.3.4
+
+### Auto: Version v2.3.4
+
+- Version auto-incremented from v2.3.3
+- Files changed: HISTORY.md, KOSDB_PERFORMANCE.md, LEVELDB_TUNING.md, PLAN.md, PROJECT.md, __pycache__/AUTOVERSION.cpython-314.pyc, __pycache__/binlog.cpython-314.pyc, __pycache__/commands.cpython-314.pyc, __pycache__/database.cpython-314.pyc, __pycache__/parser.cpython-314.pyc, __pycache__/server.cpython-314.pyc, background.log, benchmarks/bench_leveldb_enhancements.py, current_task.txt, database.py, plans/1784454267.3777697.json, plans/1785147879.7278411.json, plans/1785149948.0585515.json, server.py, state.aiia, terminal_audit.log, test_writebatch.py
+
+---
+
+
 ## 2026-07-19 — v2.3.3
 
 ### Auto: Version v2.3.3

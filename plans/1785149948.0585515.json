@@ -1,0 +1,50 @@
+{
+  "id": "1785149948.0585515",
+  "title": "",
+  "instructions": "",
+  "startTimestamp": 1785149948.0585544,
+  "endTimestamp": 1785150208.4781585,
+  "tasks": {
+    "1785149952.03793": {
+      "id": "1785149952.03793",
+      "status": "completed",
+      "instruction": "",
+      "startTimestamp": 1785149967.9581852,
+      "endTimestamp": 1785150060.1568186,
+      "log": [
+        {
+          "timestamp": 1785149967.958264,
+          "text": "Build started"
+        },
+        {
+          "timestamp": 1785149967.9975297,
+          "text": "Build started"
+        }
+      ]
+    },
+    "1785149956.8891182": {
+      "id": "1785149956.8891182",
+      "status": "completed",
+      "instruction": "",
+      "startTimestamp": 1785150060.1568193,
+      "endTimestamp": 1785150103.7961473,
+      "log": []
+    },
+    "1785149960.974722": {
+      "id": "1785149960.974722",
+      "status": "completed",
+      "instruction": "",
+      "startTimestamp": 1785150103.7961483,
+      "endTimestamp": 1785150157.4097087,
+      "log": []
+    },
+    "1785149964.7780209": {
+      "id": "1785149964.7780209",
+      "status": "completed",
+      "instruction": "",
+      "startTimestamp": 1785150157.4097095,
+      "endTimestamp": 1785150208.478021,
+      "log": []
+    }
+  }
+}

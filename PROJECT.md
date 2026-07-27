@@ -5,6 +5,9 @@
 ## Approved Directories
 .
 ../KosCMS/
+../leveldb/
+../leveldb_google/
+../plyvel/
 
 ## Approved Files
 
