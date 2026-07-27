@@ -1,14 +1,17 @@
-# LevelDB Socket Server Requirements
+# KosDB - Python Dependencies
+# Install in order: leveldb -> plyvel -> KosDB
 
-# Core dependencies
-plyvel>=1.5.0          # LevelDB Python bindings
+# Core dependencies (install plyvel_for_KosDB first)
+# See: https://github.com/m5it/plyvel_for_KosDB
 
-# Authentication
-bcrypt>=4.0.0          # Password hashing
+# Additional KosDB dependencies
+cryptography>=3.0.0
 
-# Monitoring
-psutil>=5.9.0          # System metrics
+# Optional but recommended
+# uvloop>=0.15.0  # For better async performance (Linux only)
 
-# Optional dependencies
-# pytest>=7.0.0        # Testing (development only)
-# pytest-asyncio>=0.21.0  # Async testing
+# Development dependencies (uncomment for development)
+# pytest>=6.0.0
+# pytest-cov>=2.10.0
+# black>=21.0
+# flake8>=3.9.0

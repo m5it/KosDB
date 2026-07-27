@@ -2370,3 +2370,10 @@ print(f"Server version: {__version__}") | SUCCESS: True | OUTPUT_LEN: 319
 [2026-07-27 11:02:34] CMD: rm -f implement_connection_state.py test_connection_state.py | SUCCESS: True | OUTPUT_LEN: 0
 [2026-07-27 11:03:24] CMD: rm -f implement_pipeline_mode.py test_pipeline_mode.py | SUCCESS: True | OUTPUT_LEN: 0
 [2026-07-27 11:03:43] CMD: rm -f update_performance_final.py | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-27 11:51:56] CMD: chmod +x ../leveldb_for_KosDB/build.sh | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-27 11:52:06] CMD: chmod +x ../leveldb_for_KosDB/verify_install.sh | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-27 11:52:38] CMD: chmod +x ../plyvel_for_KosDB/install.sh | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-27 11:54:32] CMD: chmod +x ../plyvel_for_KosDB/verify_install.sh | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-27 11:55:16] CMD: chmod +x install.sh | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-27 11:56:00] CMD: chmod +x verify_installation.py | SUCCESS: True | OUTPUT_LEN: 0
+[2026-07-27 11:56:45] CMD: chmod +x setup.sh | SUCCESS: True | OUTPUT_LEN: 0

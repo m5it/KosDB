@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-07-27 — v2.3.5
+
+### Auto: Version v2.3.5
+
+- Version auto-incremented from v2.3.4
+- Files changed: HISTORY.md, INSTALL.md, PLAN.md, README_SETUP.md, background.log, config.json.sample, current_task.txt, install.sh, plans/1785153046.9618096.json, requirements.txt, setup.py, setup.sh, state.aiia, terminal_audit.log, verify_installation.py
+
+---
+
+
 ## 2026-07-27 — v2.3.4
 
 ### Auto: Version v2.3.4
