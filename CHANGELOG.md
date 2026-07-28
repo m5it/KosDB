@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-07-28 — v2.3.6
+
+### Auto: Version v2.3.6
+
+- Version auto-incremented from v2.3.5
+- Files changed: FINAL_DELIVERABLES.md, HISTORY.md, IMPLEMENTATION_SUMMARY.md, INTEGRATION_CHECKLIST.md, PERFORMANCE_REPORT.md, PLAN.md, PROJECT.md, PROJECT_CLOSURE.md, PROJECT_COMPLETE.md, QUICK_REFERENCE.md, README_SORT_ENGINE.md, SORT_ENGINE_GUIDE.md, SORT_INTEGRATION_SUMMARY.md, __pycache__/database.cpython-314.pyc, add_sort_heuristics.py, background.log, benchmark_sort.py, current_task.txt, database.py, example_data/_binlog/CURRENT, example_data/_binlog/LOCK, example_data/_binlog/LOG, example_data/_binlog/MANIFEST-000002, example_data/_system/CURRENT, example_data/_system/LOCK, example_data/_system/LOG, example_data/_system/MANIFEST-000002, final_validation.py, fix_bugs.py, fix_final_test.py, fix_sort_engine.py, fix_tests.py, integrate_sort_engine.py, plans/1785153046.9618096.json, sort_backends/__init__.py, sort_backends/builtin.py, sort_backends/madsort_py.py, sort_backends/madsort_rust.py, sort_config.py, sort_engine.py, sort_examples.py, state.aiia, test_database_integration.py, test_sort_engine.py, verify_integration.py
+
+---
+
+
 ## 2026-07-27 — v2.3.5
 
 ### Auto: Version v2.3.5

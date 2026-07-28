@@ -12,6 +12,12 @@ import plyvel
 from typing import Optional, Dict, Any, List
 from binlog import Binlog
 
+try:
+    from sort_engine import SortEngine, get_sort_engine
+    SORT_ENGINE_AVAILABLE = True
+except ImportError:
+    SORT_ENGINE_AVAILABLE = False
+
 
 class Database:
     """LevelDB database layer with CRUD operations, user management and privileges."""
@@ -23,7 +29,8 @@ class Database:
                  compression: str = 'snappy',
                  bloom_filter_bits: int = 10,
                  sync_writes: bool = False,  # fsync on every write
-                 disable_wal: bool = False):  # Disable WAL for bulk load
+                 disable_wal: bool = False,  # Disable WAL for bulk load
+                 sort_engine: Optional[Any] = None):  # Sort engine for ORDER BY
         """
         Initialize database with LevelDB tuning options.
         
@@ -60,6 +67,15 @@ class Database:
         self._binlog_shutdown = False
         self._transaction_active = False
         self._transaction_changes: Dict[bytes, Optional[bytes]] = {}
+
+        # Initialize sort engine for ORDER BY operations
+        if SORT_ENGINE_AVAILABLE:
+            if sort_engine is not None:
+                self._sort_engine = sort_engine
+            else:
+                self._sort_engine = get_sort_engine()
+        else:
+            self._sort_engine = None
 
         self._db_lock = threading.Lock()
         self._cleanup_stale_locks()
@@ -565,7 +581,7 @@ class Database:
                 results.append(row)
             
             if order_by == "id":
-                results.sort(key=lambda r: r.get("id", ""), reverse=order_desc)
+                results = self._sort_results(results, "id", order_desc)
         
         if raw:
             return results
@@ -716,7 +732,7 @@ class Database:
                 
                 results.append(row)
             
-            results.sort(key=lambda r: r.get(order_by, ""), reverse=order_desc)
+            results = self._sort_results(results, order_by, order_desc)
         
         return results
     
@@ -896,6 +912,44 @@ class Database:
         """
         return self._format_results(columns, results, use_json=True)
     
+    @property
+    def sort_engine(self):
+        """Get the sort engine for ORDER BY operations."""
+        return self._sort_engine
+    
+    def _sort_results(self, results: List[Dict], order_by: str, order_desc: bool = False) -> List[Dict]:
+        """
+        Sort results using configured sort engine.
+        
+        Args:
+            results: List of row dictionaries
+            order_by: Column to sort by
+            order_desc: Reverse order if True
+        
+        Returns:
+            Sorted results
+        """
+        if not results or len(results) < 2:
+            return results
+        
+        # Use sort engine if available
+        if self._sort_engine is not None:
+            try:
+                return self._sort_engine.sort(
+                    results,
+                    key=lambda r: r.get(order_by, ""),
+                    reverse=order_desc
+                )
+            except Exception as e:
+                # Log warning and fall back to built-in sort
+                import logging
+                logging.getLogger(__name__).warning(
+                    f"Sort engine failed, falling back to built-in: {e}"
+                )
+        
+        # Built-in fallback
+        return sorted(results, key=lambda r: r.get(order_by, ""), reverse=order_desc)
+
     def close(self):
         """Close the database connection."""
         # Flush binlog before shutdown (graceful)

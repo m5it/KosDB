@@ -7,6 +7,9 @@
 ../KosCMS/
 ../leveldb/
 ../leveldb_google/
+../playground/leveldb_for_KosDB/
+../playground/madS0rt/
+../playground/plyvel_for_KosDB/
 ../plyvel/
 
 ## Approved Files
