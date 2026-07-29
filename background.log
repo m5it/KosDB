@@ -11202,3 +11202,31 @@ Usage:
 [22:43:26] INFO: Auto-continue check: no draft
 [22:43:26] INFO: Auto-continue: NOT re-entering AI() — waiting for user
 [22:43:26] You: 
+[22:46:11] [Context: 53005/262144 (20.2%)]
+[22:46:11] [iter 1] [Context: 53005/262144 (20.2%)]
+[22:46:11] INFO: AI request (iteration 1, msgs=169)
+[22:46:15] INFO: AI response: 55377 prompt + 335 response tokens (total: 1742584 / 19439)
+[22:46:15] [after +335] [Context: 53355/262144 (20.4%)]
+[22:46:15] INFO: AI() exit: no invocations, tools_were_called=False, last_error=False
+[22:46:15] INFO: Auto-continue check: no draft
+[22:46:15] INFO: Auto-continue: NOT re-entering AI() — waiting for user
+[22:46:15] You: 
+[22:47:27] [Context: 54590/262144 (20.8%)]
+[22:47:27] [iter 1] [Context: 54590/262144 (20.8%)]
+[22:47:27] INFO: AI request (iteration 1, msgs=171)
+[22:47:42] Stream waiting... (105s left)
+[22:47:56] INFO: AI response: 57040 prompt + 235 response tokens (total: 1799624 / 19674)
+[22:47:56] [after +235] [Context: 55588/262144 (21.2%)]
+[22:47:56] [iter 2] [Context: 55588/262144 (21.2%)]
+[22:47:56] INFO: AI request (iteration 2, msgs=173)
+[22:48:00] INFO: AI response: 58049 prompt + 230 response tokens (total: 1857673 / 19904)
+[22:48:00] [after +230] [Context: 55764/262144 (21.3%)]
+[22:48:00] [iter 3] [Context: 55764/262144 (21.3%)]
+[22:48:00] INFO: AI request (iteration 3, msgs=175)
+[22:48:02] INFO: AI response: 58226 prompt + 84 response tokens (total: 1915899 / 19988)
+[22:48:02] [after +84] [Context: 55855/262144 (21.3%)]
+[22:48:02] INFO: AI() exit: no invocations, tools_were_called=True, last_error=False
+[22:48:02] INFO: _try_auto_continue: no draft
+[22:48:02] INFO: Auto-continue check: no draft
+[22:48:02] INFO: Auto-continue: NOT re-entering AI() — waiting for user
+[22:48:02] You: 

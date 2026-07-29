@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-07-29 — v2.3.13
+
+### Auto: Version v2.3.13
+
+- Version auto-incremented from v2.3.12
+- Files changed: README.md, background.log, state.aiia
+
+---
+
+
 ## 2026-07-29 — v2.3.12
 
 ### Auto: Version v2.3.12
