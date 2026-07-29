@@ -10856,3 +10856,37 @@ Usage:
 [08:11:35] INFO: Auto-continue check: no draft
 [08:11:35] INFO: Auto-continue: NOT re-entering AI() — waiting for user
 [08:11:35] You: 
+[22:10:27] INFO: Session started, sess_id=337, mode=build, model=kimi-k2.5:cloud
+[22:10:27] You: 
+[22:10:31] You: 
+[22:10:44] You: 
+[22:11:11] INFO: Session started, sess_id=338, mode=build, model=kimi-k2.5:cloud
+[22:11:11] You: 
+[22:11:14] [Context: 575/262144 (0.2%)]
+[22:11:14] [iter 1] [Context: 575/262144 (0.2%)]
+[22:11:14] INFO: AI request (iteration 1, msgs=4)
+[22:11:24] INFO: AI response: 689 prompt + 960 response tokens (total: 95608 / 1239)
+[22:11:24] [after +960] [Context: 1252/262144 (0.5%)]
+[22:11:24] [iter 2] [Context: 1252/262144 (0.5%)]
+[22:11:24] INFO: AI request (iteration 2, msgs=10)
+[22:11:28] <WriteFile
+[Aborted: 'WriteFile' cannot be used in PLAN mode]
+[22:11:28] Stream aborted: 'WriteFile' cannot be used in PLAN mode
+[22:11:28] INFO: AI response: 0 prompt + 0 response tokens (total: 95608 / 1239)
+[22:11:28] [after +0] [Context: 1516/262144 (0.6%)]
+[22:11:28] Model tried to use 'WriteFile' in PLAN mode.
+[22:11:28]   1. Switch to BUILD mode (allow the tool)
+[22:11:28]   2. Stay in PLAN mode (block the tool, continue planning)
+[22:11:28]   3. Cancel AI (return to user prompt)
+[22:11:28]   4. Continue (dismiss, let the model proceed)
+[22:11:28] Choice (1-4): 
+[22:11:58] You: 
+[22:13:26] [Context: 2564/262144 (1.0%)]
+[22:13:26] [iter 1] [Context: 2564/262144 (1.0%)]
+[22:13:26] INFO: AI request (iteration 1, msgs=13)
+[22:13:33] INFO: AI response: 2112 prompt + 553 response tokens (total: 97720 / 1792)
+[22:13:33] [after +553] [Context: 3165/262144 (1.2%)]
+[22:13:33] INFO: AI() exit: no invocations, tools_were_called=False, last_error=False
+[22:13:33] INFO: Auto-continue check: mode=plan, last_ai_had_tools=False
+[22:13:33] INFO: Auto-continue: NOT re-entering AI() — waiting for user
+[22:13:33] You: 
