@@ -11166,3 +11166,39 @@ Usage:
 [22:33:50] INFO: Auto-continue check: no draft
 [22:33:50] INFO: Auto-continue: NOT re-entering AI() — waiting for user
 [22:33:50] You: 
+[22:38:53] [Context: 50169/262144 (19.1%)]
+[22:38:53] [iter 1] [Context: 50169/262144 (19.1%)]
+[22:38:53] INFO: AI request (iteration 1, msgs=158)
+[22:39:04] INFO: AI response: 52725 prompt + 383 response tokens (total: 1471273 / 17033)
+[22:39:04] [after +383] [Context: 50544/262144 (19.3%)]
+[22:39:04] INFO: AI() exit: no invocations, tools_were_called=False, last_error=False
+[22:39:04] INFO: Auto-continue check: no draft
+[22:39:04] INFO: Auto-continue: NOT re-entering AI() — waiting for user
+[22:39:04] You: 
+[22:39:43] [Context: 50562/262144 (19.3%)]
+[22:39:43] [iter 1] [Context: 50562/262144 (19.3%)]
+[22:39:43] INFO: AI request (iteration 1, msgs=160)
+[22:39:50] INFO: AI response: 52999 prompt + 500 response tokens (total: 1524272 / 17533)
+[22:39:50] [after +500] [Context: 51024/262144 (19.5%)]
+[22:39:50] INFO: AI() exit: no invocations, tools_were_called=False, last_error=False
+[22:39:50] INFO: Auto-continue check: no draft
+[22:39:50] INFO: Auto-continue: NOT re-entering AI() — waiting for user
+[22:39:50] You: 
+[22:43:00] [Context: 51340/262144 (19.6%)]
+[22:43:00] [iter 1] [Context: 51340/262144 (19.6%)]
+[22:43:00] INFO: AI request (iteration 1, msgs=162)
+[22:43:14] INFO: AI response: 53731 prompt + 463 response tokens (total: 1578003 / 17996)
+[22:43:14] [after +463] [Context: 51750/262144 (19.7%)]
+[22:43:14] [iter 2] [Context: 51750/262144 (19.7%)]
+[22:43:14] INFO: AI request (iteration 2, msgs=164)
+[22:43:22] INFO: AI response: 54187 prompt + 768 response tokens (total: 1632190 / 18764)
+[22:43:22] [after +768] [Context: 52584/262144 (20.1%)]
+[22:43:22] [iter 3] [Context: 52645/262144 (20.1%)]
+[22:43:22] INFO: AI request (iteration 3, msgs=167)
+[22:43:26] INFO: AI response: 55017 prompt + 340 response tokens (total: 1687207 / 19104)
+[22:43:26] [after +340] [Context: 52957/262144 (20.2%)]
+[22:43:26] INFO: AI() exit: no invocations, tools_were_called=True, last_error=False
+[22:43:26] INFO: _try_auto_continue: no draft
+[22:43:26] INFO: Auto-continue check: no draft
+[22:43:26] INFO: Auto-continue: NOT re-entering AI() — waiting for user
+[22:43:26] You: 

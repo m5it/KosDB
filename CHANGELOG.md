@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-07-29 — v2.3.12
+
+### Auto: Version v2.3.12
+
+- Version auto-incremented from v2.3.11
+- Files changed: .github/workflows/ci.yml, background.log, state.aiia
+
+---
+
+
 ## 2026-07-29 — v2.3.11
 
 ### Auto: Version v2.3.11
