@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-07-29 — v2.3.9
+
+### Auto: Version v2.3.9
+
+- Version auto-incremented from v2.3.8
+- Files changed: .github/workflows/ci.yml, HISTORY.md, PLAN.md, background.log, current_task.txt, docs/CODECOV_SETUP.md, plans/1785363770.4581513.json, state.aiia
+
+---
+
+
 ## 2026-07-29 — v2.3.8
 
 ### Auto: Version v2.3.8
