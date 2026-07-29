@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-07-29 — v2.3.10
+
+### Auto: Version v2.3.10
+
+- Version auto-incremented from v2.3.9
+- Files changed: HISTORY.md, background.log, state.aiia
+
+---
+
+
 ## 2026-07-29 — v2.3.9
 
 ### Auto: Version v2.3.9
