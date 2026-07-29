@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-07-29 — v2.3.11
+
+### Auto: Version v2.3.11
+
+- Version auto-incremented from v2.3.10
+- Files changed: .gitignore, HISTORY.md, docs/HISTORY.md
+
+---
+
+
 ## 2026-07-29 — v2.3.10
 
 ### Auto: Version v2.3.10
