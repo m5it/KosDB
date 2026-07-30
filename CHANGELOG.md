@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-07-30 — v2.3.14
+
+### Auto: Version v2.3.14
+
+- Version auto-incremented from v2.3.13
+- Files changed: .github/workflows/performance.yml, background.log, state.aiia
+
+---
+
+
 ## 2026-07-29 — v2.3.13
 
 ### Auto: Version v2.3.13
