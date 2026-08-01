@@ -67,6 +67,7 @@ class Database:
         self._binlog_shutdown = False
         self._transaction_active = False
         self._transaction_changes: Dict[bytes, Optional[bytes]] = {}
+        self._transaction_binlog: List[Dict[str, Any]] = []
 
         # Initialize sort engine for ORDER BY operations
         if SORT_ENGINE_AVAILABLE:
@@ -78,20 +79,11 @@ class Database:
             self._sort_engine = None
 
         self._db_lock = threading.Lock()
-        self._cleanup_stale_locks()
+        self._counter_lock = threading.Lock()
         self._ensure_data_dir()
         self._open_system_db()
         self._open_binlog()
         self._start_binlog_worker()
-    
-    def _cleanup_stale_locks(self):
-        """Remove stale LOCK files from crashed processes."""
-        import glob
-        for lock_file in glob.glob(f"{self.data_dir}/**/LOCK", recursive=True):
-            try:
-                os.remove(lock_file)
-            except OSError:
-                pass  # File in use by another process
     
     def _ensure_data_dir(self):
         """Ensure data directory exists."""
@@ -124,33 +116,41 @@ class Database:
     
     def _binlog_worker(self):
         """Background worker that writes binlog entries from queue."""
-        while not self._binlog_shutdown:
+        while True:
             try:
                 entry = self._binlog_queue.get(timeout=1)
+            except queue.Empty:
+                if self._binlog_shutdown:
+                    break
+                continue
+            try:
                 if entry is None:
                     break
                 self._binlog.write_entry(**entry)
-                self._binlog_queue.task_done()
-            except queue.Empty:
-                continue
             except Exception as e:
                 print(f"Binlog worker error: {e}")
+            finally:
+                self._binlog_queue.task_done()
     
     def _flush_binlog_queue(self):
         """Flush remaining binlog entries on shutdown."""
         if self._binlog_queue and self._binlog:
             self._binlog_shutdown = True
-            try:
-                self._binlog_queue.join(timeout=5)
-            except:
-                pass
+            # Signal worker to stop after draining pending entries
+            self._binlog_queue.put(None)
+            if self._binlog_thread and self._binlog_thread.is_alive():
+                self._binlog_thread.join(timeout=5)
+            # Write any entries the worker did not get to
             while not self._binlog_queue.empty():
                 try:
                     entry = self._binlog_queue.get_nowait()
+                except queue.Empty:
+                    break
+                try:
                     if entry:
                         self._binlog.write_entry(**entry)
-                except:
-                    break
+                except Exception as e:
+                    print(f"Binlog flush error: {e}")
     
     def _log_binlog_async(self, **kwargs):
         """Non-blocking binlog write - puts entry in queue for background thread.
@@ -158,7 +158,13 @@ class Database:
         TRADE-OFF: Last few writes may be lost on crash, but normal shutdown
         flushes all entries. Reduces write latency by ~50% by moving I/O
         to background thread.
+        
+        During an active transaction, entries are buffered and only enqueued
+        on commit (dropped on rollback) so replicas don't see uncommitted ops.
         """
+        if self._transaction_active:
+            self._transaction_binlog.append(kwargs)
+            return
         if self._binlog and self._binlog_queue:
             self._binlog_queue.put(kwargs)
     
@@ -197,6 +203,21 @@ class Database:
         """Create a key for a row."""
         return f"{table_name}:{row_id}".encode()
     
+    def _get_current(self, key: bytes) -> Optional[bytes]:
+        """Read a key, seeing pending transaction changes first (read-your-own-writes)."""
+        if self._transaction_active and key in self._transaction_changes:
+            return self._transaction_changes[key]
+        return self._db.get(key)
+    
+    def get_schema(self, table_name: str) -> Optional[Dict[str, Any]]:
+        """Return the schema dict for a table, or None if it doesn't exist."""
+        if not self._db:
+            return None
+        schema_data = self._get_current(f"_schema:{table_name}".encode())
+        if not schema_data:
+            return None
+        return json.loads(schema_data.decode())
+    
     # Transaction support
     def begin_transaction(self) -> str:
         """Begin a new transaction."""
@@ -207,6 +228,7 @@ class Database:
         
         self._transaction_active = True
         self._transaction_changes = {}
+        self._transaction_binlog = []
         self._transaction_start_time = time.time()
         return "OK: Transaction started"
     
@@ -233,11 +255,19 @@ class Database:
             self._transaction_active = False
             self._transaction_changes = {}
             
+            # Publish buffered binlog entries now that the transaction is durable
+            pending_binlog = self._transaction_binlog
+            self._transaction_binlog = []
+            if self._binlog and self._binlog_queue:
+                for entry in pending_binlog:
+                    self._binlog_queue.put(entry)
+            
             return f"OK: Committed {changes} change(s) atomically in {duration:.3f}s"
         except Exception as e:
             # Transaction failed - all changes rolled back automatically by LevelDB
             self._transaction_active = False
             self._transaction_changes = {}
+            self._transaction_binlog = []
             return f"ERROR: Transaction failed and rolled back: {e}"
     
     def rollback_transaction(self) -> str:
@@ -248,6 +278,7 @@ class Database:
         changes = len(self._transaction_changes)
         self._transaction_active = False
         self._transaction_changes = {}
+        self._transaction_binlog = []  # Discard binlog entries for rolled-back ops
         
         return f"OK: Rolled back {changes} change(s)"
     
@@ -309,8 +340,8 @@ class Database:
                 operation="DROP_DB",
                 data={"db_name": db_name}
             )
-
-
+        
+        return f"Database '{db_name}' dropped"
 
     def use_database(self, db_name: str) -> str:
         """Switch to a database."""
@@ -341,6 +372,15 @@ class Database:
             self.current_db = db_name
         
         return f"Switched to database '{db_name}'"
+    
+    def create_table(self, table_name: str, columns: List[str]) -> str:
+        """Create a table with schema, primary key and secondary indexes."""
+        if not self._db:
+            return "No database selected. Use USE <database>"
+        
+        schema_key = f"_schema:{table_name}".encode()
+        if self._db.get(schema_key) or schema_key in self._transaction_changes:
+            return f"Table '{table_name}' already exists"
         
         parsed_columns = []
         primary_key = None
@@ -416,84 +456,58 @@ class Database:
         return f"Table '{table_name}' dropped"
     
     def insert(self, table_name: str, values: List[Any]) -> str:
-        """Insert a row into a table."""
+        """Insert a row into a table (positional values follow schema column order)."""
         if not self._db:
             return "No database selected. Use USE <database>"
         
-        schema_key = f"_schema:{table_name}".encode()
-        schema_data = self._db.get(schema_key)
-        if not schema_data:
+        schema = self.get_schema(table_name)
+        if not schema:
             return f"Table '{table_name}' does not exist"
         
-        schema = json.loads(schema_data.decode())
-        row_id = str(schema["next_id"])
-        
-        row = {"id": row_id}
-        for i, col in enumerate(schema["columns"]):
-            if i < len(values):
-                row[col] = values[i]
-        
-        primary_key = schema.get("primary_key")
-        if primary_key and primary_key in row:
-            store_key = str(row[primary_key])
-        else:
-            store_key = row_id
-        
-        key = self._make_key(table_name, store_key)
-        self._transaction_put(key, json.dumps(row).encode())
-        
-        self._update_indexes(table_name, row, store_key, schema)
-        
-        if not primary_key:
-            schema["next_id"] += 1
-            self._transaction_put(schema_key, json.dumps(schema).encode())
-        
-        # Log to binlog
-        if self._binlog:
-            self._log_binlog_async(
-                server_id=self.server_id,
-                database=self.current_db or "",
-                operation="INSERT",
-                table=table_name,
-                data={"row": row}
-            )
-        
-
-        return f"Inserted 1 row into '{table_name}'"
+        return self._insert_row(table_name, schema["columns"], values)
     
     def insert_with_columns(self, table_name: str, columns: List[str], values: List[Any]) -> str:
         """Insert a row with explicit column mapping."""
         if not self._db:
             return "No database selected. Use USE <database>"
         
-        schema_key = f"_schema:{table_name}".encode()
-        schema_data = self._db.get(schema_key)
-        if not schema_data:
+        if not self.get_schema(table_name):
             return f"Table '{table_name}' does not exist"
         
-        schema = json.loads(schema_data.decode())
-        row_id = str(schema["next_id"])
+        return self._insert_row(table_name, columns, values)
+    
+    def _insert_row(self, table_name: str, columns: List[str], values: List[Any]) -> str:
+        """Shared insert path: PK uniqueness, id assignment and index updates."""
+        schema_key = f"_schema:{table_name}".encode()
         
-        # Build row with explicit column mapping
-        row = {"id": row_id}
-        for i, col in enumerate(columns):
-            if i < len(values):
-                row[col] = values[i]
-        
-        primary_key = schema.get("primary_key")
-        if primary_key and primary_key in row:
-            store_key = str(row[primary_key])
-        else:
-            store_key = row_id
-        
-        key = self._make_key(table_name, store_key)
-        self._transaction_put(key, json.dumps(row).encode())
-        
-        self._update_indexes(table_name, row, store_key, schema)
-        
-        if not primary_key:
-            schema["next_id"] += 1
-            self._transaction_put(schema_key, json.dumps(schema).encode())
+        with self._counter_lock:
+            schema_data = self._get_current(schema_key)
+            if not schema_data:
+                return f"Table '{table_name}' does not exist"
+            schema = json.loads(schema_data.decode())
+            
+            data = {}
+            for i, col in enumerate(columns):
+                if i < len(values):
+                    data[col] = values[i]
+            
+            primary_key = schema.get("primary_key")
+            if primary_key and primary_key in data:
+                store_key = str(data[primary_key])
+                key = self._make_key(table_name, store_key)
+                if self._get_current(key) is not None:
+                    return f"ERROR: Duplicate primary key '{store_key}' in '{table_name}'"
+            else:
+                store_key = str(schema["next_id"])
+                key = self._make_key(table_name, store_key)
+                schema["next_id"] += 1
+                self._transaction_put(schema_key, json.dumps(schema).encode())
+            
+            row = {"id": store_key}
+            row.update(data)
+            
+            self._transaction_put(key, json.dumps(row).encode())
+            self._update_indexes(table_name, row, store_key, schema)
         
         # Log to binlog
         if self._binlog:
@@ -507,13 +521,13 @@ class Database:
         
         return f"Inserted 1 row into '{table_name}'"
     def _update_indexes(self, table_name: str, row: Dict, row_key: str, schema: Dict):
-        """Update all indexes for a row."""
+        """Update all indexes for a row (transaction-aware)."""
         primary_key = schema.get("primary_key")
         indexes = schema.get("indexes", [])
         
         if primary_key and primary_key in row:
             idx_key = f"_index:{table_name}:{primary_key}".encode()
-            idx_data = self._db.get(idx_key)
+            idx_data = self._get_current(idx_key)
             if idx_data:
                 index_map = json.loads(idx_data.decode())
                 index_map[str(row[primary_key])] = row_key
@@ -522,16 +536,50 @@ class Database:
         for idx_col in indexes:
             if idx_col in row:
                 idx_key = f"_index:{table_name}:{idx_col}".encode()
-                idx_data = self._db.get(idx_key)
+                idx_data = self._get_current(idx_key)
                 if idx_data:
                     index_map = json.loads(idx_data.decode())
                     val = str(row[idx_col])
                     if val not in index_map:
                         index_map[val] = []
                     if isinstance(index_map[val], list):
-                        index_map[val].append(row_key)
+                        if row_key not in index_map[val]:
+                            index_map[val].append(row_key)
                     else:
                         index_map[val] = [index_map[val], row_key]
+                    self._transaction_put(idx_key, json.dumps(index_map).encode())
+    
+    def _remove_from_indexes(self, table_name: str, row: Dict, row_key: str, schema: Dict):
+        """Remove a row's entries from all indexes (transaction-aware)."""
+        primary_key = schema.get("primary_key")
+        indexes = schema.get("indexes", [])
+        
+        if primary_key and primary_key in row:
+            idx_key = f"_index:{table_name}:{primary_key}".encode()
+            idx_data = self._get_current(idx_key)
+            if idx_data:
+                index_map = json.loads(idx_data.decode())
+                if index_map.pop(str(row[primary_key]), None) is not None:
+                    self._transaction_put(idx_key, json.dumps(index_map).encode())
+        
+        for idx_col in indexes:
+            if idx_col in row:
+                idx_key = f"_index:{table_name}:{idx_col}".encode()
+                idx_data = self._get_current(idx_key)
+                if idx_data:
+                    index_map = json.loads(idx_data.decode())
+                    val = str(row[idx_col])
+                    entries = index_map.get(val)
+                    if entries is None:
+                        continue
+                    if not isinstance(entries, list):
+                        entries = [entries]
+                    if row_key in entries:
+                        entries.remove(row_key)
+                    if entries:
+                        index_map[val] = entries
+                    else:
+                        index_map.pop(val, None)
                     self._transaction_put(idx_key, json.dumps(index_map).encode())
     
     def select(self, table_name: str, columns: Optional[List[str]] = None,
@@ -712,6 +760,16 @@ class Database:
                     row_data = self._db.get(row_key_full)
                     if row_data:
                         row = json.loads(row_data.decode())
+                        
+                        if where:
+                            match = True
+                            for col, w_val in where.items():
+                                if str(row.get(col)) != str(w_val):
+                                    match = False
+                                    break
+                            if not match:
+                                continue
+                        
                         results.append(row)
         else:
             prefix = f"{table_name}:".encode()
@@ -752,6 +810,12 @@ class Database:
         updated_rows = []
         prefix = f"{table_name}:".encode()
         
+        primary_key = schema.get("primary_key")
+        indexed_cols = set(schema.get("indexes", []))
+        if primary_key:
+            indexed_cols.add(primary_key)
+        touches_index = bool(indexed_cols & set(set_clause.keys()))
+        
         for key, value in self._db.iterator(prefix=prefix):
             if key.startswith(f"_schema:{table_name}".encode()):
                 continue
@@ -767,18 +831,29 @@ class Database:
                 if not match:
                     continue
             
-            old_key_val = None
-            primary_key = schema.get("primary_key")
-            if primary_key and primary_key in set_clause:
-                old_key_val = row.get(primary_key)
-            
+            old_row = row.copy()
             for col, val in set_clause.items():
                 row[col] = val
             
-            self._transaction_put(key, json.dumps(row).encode())
+            store_key = key.decode().split(':', 1)[1]
+            new_store_key = store_key
             
-            if old_key_val is not None and primary_key:
-                self._update_indexes(table_name, row, str(row[primary_key]), schema)
+            if primary_key and primary_key in set_clause and str(row.get(primary_key)) != store_key:
+                # Primary key changed: move row to its new key
+                new_store_key = str(row[primary_key])
+                new_key = self._make_key(table_name, new_store_key)
+                if self._get_current(new_key) is not None:
+                    return f"ERROR: Duplicate primary key '{new_store_key}' in '{table_name}' (updated {updated} row(s) before error)"
+                row["id"] = new_store_key
+                self._transaction_delete(key)
+                self._transaction_put(new_key, json.dumps(row).encode())
+            else:
+                self._transaction_put(key, json.dumps(row).encode())
+            
+            # Maintain indexes for changed indexed columns / moved rows
+            if touches_index or new_store_key != store_key:
+                self._remove_from_indexes(table_name, old_row, store_key, schema)
+                self._update_indexes(table_name, row, new_store_key, schema)
             
             updated_rows.append(row.copy())
             updated += 1
@@ -805,6 +880,7 @@ class Database:
         if not schema_data:
             return f"Table '{table_name}' does not exist"
         
+        schema = json.loads(schema_data.decode())
         deleted = 0
         keys_to_delete = []
         deleted_rows = []
@@ -828,8 +904,10 @@ class Database:
             keys_to_delete.append(key)
             deleted_rows.append(row.copy())
         
-        for key in keys_to_delete:
+        for key, row in zip(keys_to_delete, deleted_rows):
             self._transaction_delete(key)
+            store_key = key.decode().split(':', 1)[1]
+            self._remove_from_indexes(table_name, row, store_key, schema)
             deleted += 1
         
         # Log to binlog
@@ -1108,30 +1186,31 @@ class Database:
         """Create a new user."""
         self._ensure_system_tables()
         
-        # Check if user exists
-        prefix = b"_users:"
-        for key, value in self._system_db.iterator(prefix=prefix):
-            user_data = json.loads(value.decode())
-            if user_data.get("username") == username:
-                return f"User '{username}' already exists"
-        
-        # Create user
-        password_hash = self._hash_password(password)
-        user_id = self._get_next_user_id()
-        user_data = {
-            "id": user_id,
-            "username": username,
-            "password_hash": password_hash,
-            "is_admin": is_admin,
-            "created_at": str(time.time())
-        }
-        
-        key = f"_users:{user_id}".encode()
-        self._system_db.put(key, json.dumps(user_data).encode())
+        with self._counter_lock:
+            # Check if user exists (under lock to prevent duplicate usernames)
+            prefix = b"_users:"
+            for key, value in self._system_db.iterator(prefix=prefix):
+                user_data = json.loads(value.decode())
+                if user_data.get("username") == username:
+                    return f"User '{username}' already exists"
+            
+            # Create user
+            password_hash = self._hash_password(password)
+            user_id = self._get_next_user_id()
+            user_data = {
+                "id": user_id,
+                "username": username,
+                "password_hash": password_hash,
+                "is_admin": is_admin,
+                "created_at": str(time.time())
+            }
+            
+            key = f"_users:{user_id}".encode()
+            self._system_db.put(key, json.dumps(user_data).encode())
         return f"User '{username}' created successfully"
     
     def _get_next_user_id(self) -> str:
-        """Get next user ID."""
+        """Get next user ID. Caller must hold _counter_lock."""
         schema_key = b"_schema:_users"
         schema_data = self._system_db.get(schema_key)
         if schema_data:
@@ -1178,21 +1257,22 @@ class Database:
         """Grant privileges to a user."""
         self._ensure_system_tables()
         
-        priv_id = self._get_next_privilege_id()
-        priv_data = {
-            "id": priv_id,
-            "username": username,
-            "db_pattern": db_pattern,
-            "table_pattern": table_pattern,
-            "privileges": privileges
-        }
-        
-        key = f"_privileges:{priv_id}".encode()
-        self._system_db.put(key, json.dumps(priv_data).encode())
+        with self._counter_lock:
+            priv_id = self._get_next_privilege_id()
+            priv_data = {
+                "id": priv_id,
+                "username": username,
+                "db_pattern": db_pattern,
+                "table_pattern": table_pattern,
+                "privileges": privileges
+            }
+            
+            key = f"_privileges:{priv_id}".encode()
+            self._system_db.put(key, json.dumps(priv_data).encode())
         return f"Granted {','.join(privileges)} on {db_pattern}.{table_pattern} to '{username}'"
     
     def _get_next_privilege_id(self) -> str:
-        """Get next privilege ID."""
+        """Get next privilege ID. Caller must hold _counter_lock."""
         schema_key = b"_schema:_privileges"
         schema_data = self._system_db.get(schema_key)
         if schema_data:

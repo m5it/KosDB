@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-08-01 — v2.3.15
+
+### Auto: Version v2.3.15
+
+- Version auto-incremented from v2.3.14
+- Files changed: NEWPLAN.md, binlog.py, commands.py, database.py, server.py, tests/test_tls_wrapper.py, tls_wrapper.py
+
+---
+
+
 ## 2026-07-30 — v2.3.14
 
 ### Auto: Version v2.3.14

@@ -114,8 +114,10 @@ class CreateTableCommand(Command):
             return "ERROR: No database selected"
         try:
             columns = params.get('columns', [])
-            self.db.create_table(params['table'], columns)
-            return f"OK: Table '{params['table']}' created"
+            result = self.db.create_table(params['table'], columns)
+            if result and 'created' in result:
+                return f"OK: Table '{params['table']}' created"
+            return f"ERROR: {result}"
         except Exception as e:
             return f"ERROR: {e}"
 
@@ -145,14 +147,17 @@ class InsertCommand(Command):
             columns = params.get('columns')
             if columns:
                 # Columns already parsed as list by parser
-                self.db.insert_with_columns(params['table'], columns, params['values'])
+                result = self.db.insert_with_columns(params['table'], columns, params['values'])
             else:
-                self.db.insert(params['table'], params['values'])
-            return f"OK: Inserted into '{params['table']}'"
+                result = self.db.insert(params['table'], params['values'])
+            if result and result.startswith('Inserted'):
+                return f"OK: Inserted into '{params['table']}'"
+            if result and result.startswith('ERROR'):
+                return result
+            return f"ERROR: {result}"
         except Exception as e:
             return f"ERROR: {e}"
 
-            return f"ERROR: {e}"
 
 class SelectCommand(Command):
     def execute(self, params, client_state):
@@ -194,8 +199,12 @@ class DeleteCommand(Command):
         if not client_state.get('current_db'):
             return "ERROR: No database selected"
         try:
-            count = self.db.delete(params['table'], params.get('where'))
-            return f"OK: Deleted {count} row(s)"
+            result = self.db.delete(params['table'], params.get('where'))
+            # Extract row count from result string like "Deleted 3 row(s) from 'table'"
+            match = re.search(r'Deleted (\d+) row', result)
+            if match:
+                return f"OK: Deleted {match.group(1)} row(s)"
+            return f"ERROR: {result}"
         except Exception as e:
             return f"ERROR: {e}"
 
@@ -273,36 +282,15 @@ class UpsertCommand(Command):
     
     def execute(self, params: Dict[str, Any], client_state: Dict[str, Any]) -> str:
         table = params.get('table')
-        columns_str = params.get('columns', '')
-        values_str = params.get('values', '')
+        # Parser already delivers columns/values as lists
+        columns = params.get('columns') or []
+        values = params.get('values') or []
         
         if not client_state.get('current_db'):
             return "ERROR: No database selected"
         
-        # Parse columns
-        if columns_str:
-            columns = [c.strip() for c in columns_str.split(',')]
-        else:
-            columns = []
-        
-        # Parse values
-        values = []
-        for v in values_str.split(','):
-            v = v.strip()
-            if (v.startswith("'") and v.endswith("'")) or (v.startswith('"') and v.endswith('"')):
-                v = v[1:-1]
-            else:
-                try:
-                    v = int(v)
-                except ValueError:
-                    try:
-                        v = float(v)
-                    except ValueError:
-                        pass
-            values.append(v)
-        
         # Get schema to find primary key
-        schema = self.db._get_schema(table)
+        schema = self.db.get_schema(table)
         if not schema:
             return f"ERROR: Table '{table}' does not exist"
         
@@ -338,32 +326,13 @@ class BatchUpdateCommand(Command):
     
     def execute(self, params: Dict[str, Any], client_state: Dict[str, Any]) -> str:
         table = params.get('table')
-        set_clause_str = params.get('set', '')
+        # Parser already delivers SET clause as a dict
+        set_clause = params.get('set') or {}
         where_col = params.get('where_col', '')
         where_values_str = params.get('where_values', '')
         
         if not client_state.get('current_db'):
             return "ERROR: No database selected"
-        
-        # Parse SET clause
-        set_clause = {}
-        for assignment in set_clause_str.split(','):
-            if '=' not in assignment:
-                continue
-            col, val = assignment.split('=', 1)
-            col = col.strip()
-            val = val.strip()
-            if (val.startswith("'") and val.endswith("'")) or (val.startswith('"') and val.endswith('"')):
-                val = val[1:-1]
-            else:
-                try:
-                    val = int(val)
-                except ValueError:
-                    try:
-                        val = float(val)
-                    except ValueError:
-                        pass
-            set_clause[col] = val
         
         # Parse WHERE IN values
         where_values = []
@@ -382,12 +351,13 @@ class BatchUpdateCommand(Command):
             where_values.append(str(v))
         
         # Get schema
-        schema = self.db._get_schema(table)
+        schema = self.db.get_schema(table)
         if not schema:
             return f"ERROR: Table '{table}' does not exist"
         
         primary_key = schema.get("primary_key")
         updated_count = 0
+        updated_pairs = []  # (old_row, new_row, store_key) for index maintenance
         batch = self.db._db.write_batch()
         
         try:
@@ -398,9 +368,11 @@ class BatchUpdateCommand(Command):
                     row_data = self.db._db.get(row_key)
                     if row_data:
                         row = json.loads(row_data.decode())
+                        old_row = row.copy()
                         for col, val in set_clause.items():
                             row[col] = val
                         batch.put(row_key, json.dumps(row).encode())
+                        updated_pairs.append((old_row, row, key_val))
                         updated_count += 1
                 else:
                     # Scan
@@ -410,16 +382,24 @@ class BatchUpdateCommand(Command):
                             continue
                         row = json.loads(value.decode())
                         if str(row.get(where_col)) == key_val:
+                            old_row = row.copy()
                             for col, val in set_clause.items():
                                 row[col] = val
                             batch.put(key, json.dumps(row).encode())
+                            store_key = key.decode().split(':', 1)[1]
+                            updated_pairs.append((old_row, row, store_key))
                             updated_count += 1
                             break
             
             batch.write()
             
+            # Maintain secondary indexes for changed rows
+            for old_row, new_row, store_key in updated_pairs:
+                self.db._remove_from_indexes(table, old_row, store_key, schema)
+                self.db._update_indexes(table, new_row, store_key, schema)
+            
             if self.db._binlog:
-                self.db._binlog.write_entry(
+                self.db._log_binlog_async(
                     server_id=self.db.server_id,
                     database=client_state.get('current_db', ''),
                     operation="BATCH_UPDATE",

@@ -63,7 +63,8 @@ class TLSSocketWrapper:
     
     def __init__(self, config: TLSConfig):
         self.config = config
-        self._context: Optional[ssl.SSLContext] = None
+        self._server_context: Optional[ssl.SSLContext] = None
+        self._client_context: Optional[ssl.SSLContext] = None
     
     def _create_context(self, server_side: bool = True) -> ssl.SSLContext:
         """Create SSL context with configured settings."""
@@ -116,20 +117,34 @@ class TLSSocketWrapper:
         if not self.config.enabled:
             return sock
         
-        if self._context is None:
-            self._context = self._create_context(server_side=True)
+        if self._server_context is None:
+            self._server_context = self._create_context(server_side=True)
         
-        return self._context.wrap_socket(sock, server_side=True)
+        return self._server_context.wrap_socket(sock, server_side=True)
+    
+    def wrap_accepted_socket(self, sock: socket.socket) -> ssl.SSLSocket:
+        """Wrap an accepted client connection with the server-side TLS context.
+        
+        Use this on sockets returned by accept() - the server performs the
+        server side of the TLS handshake.
+        """
+        if not self.config.enabled:
+            return sock
+        
+        if self._server_context is None:
+            self._server_context = self._create_context(server_side=True)
+        
+        return self._server_context.wrap_socket(sock, server_side=True)
     
     def wrap_client_socket(self, sock: socket.socket, server_hostname: Optional[str] = None) -> ssl.SSLSocket:
         """Wrap a client socket with TLS."""
         if not self.config.enabled:
             return sock
         
-        if self._context is None:
-            self._context = self._create_context(server_side=False)
+        if self._client_context is None:
+            self._client_context = self._create_context(server_side=False)
         
-        return self._context.wrap_socket(sock, server_hostname=server_hostname)
+        return self._client_context.wrap_socket(sock, server_hostname=server_hostname)
     
     def get_cipher_info(self, sock: ssl.SSLSocket) -> dict:
         """Get cipher information from SSL socket."""

@@ -30,24 +30,6 @@ from parser import BackupRestoreParser
 from commands import CommandRegistry
 from database import Database
 from auth import Authenticator
-import os
-import socket
-import threading
-import json
-import logging
-import hashlib
-import ssl
-import re
-import time
-import argparse
-from datetime import datetime
-
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from tls_wrapper import TLSConfig, TLSSocketWrapper, generate_self_signed_cert
-from parser import BackupRestoreParser
-from commands import CommandRegistry
-from database import Database
-from auth import Authenticator
 
 
 class ClientHandler(threading.Thread):
@@ -181,7 +163,8 @@ class ClientHandler(threading.Thread):
         
         # Handle USE command with connection-level state
         if cmd_upper.startswith('USE '):
-            db_name = command.split()[1] if len(command.split()) > 1 else None
+            parts = command.split()
+            db_name = parts[1] if len(parts) > 1 else None
             if not db_name:
                 return "ERROR: Usage: USE <database>"
             
@@ -189,28 +172,16 @@ class ClientHandler(threading.Thread):
             if db_name not in self.db.list_databases():
                 return f"ERROR: Database '{db_name}' does not exist"
             
-            # Set connection-level database state
+            # Switch the engine to this database and track connection-level state.
+            # NOTE: the Database instance is shared across connections; commands
+            # operate on the engine's currently selected database.
+            try:
+                result = self.db.use_database(db_name)
+            except Exception as e:
+                return f"ERROR: Failed to open database: {e}"
+            
             self.client_state['current_db'] = db_name
-            
-            # Open per-connection database handle if not already open
-            if self.client_state['connection_db'] is None:
-                import plyvel
-                db_path = os.path.join(self.db.data_dir, db_name)
-                try:
-                    self.client_state['connection_db'] = plyvel.DB(db_path, create_if_missing=False)
-                except Exception as e:
-                    return f"ERROR: Failed to open database: {e}"
-            else:
-                # Close current and open new
-                self.client_state['connection_db'].close()
-                import plyvel
-                db_path = os.path.join(self.db.data_dir, db_name)
-                try:
-                    self.client_state['connection_db'] = plyvel.DB(db_path, create_if_missing=False)
-                except Exception as e:
-                    return f"ERROR: Failed to open database: {e}"
-            
-            return f"Switched to database '{db_name}'"
+            return result
         
         # Parse and execute other commands
         try:
@@ -317,10 +288,10 @@ class SocketServer:
             while self.running:
                 client_socket, address = self.socket.accept()
                 
-                # Wrap with TLS if enabled
+                # Wrap with TLS if enabled (server-side handshake on accepted socket)
                 if self.tls_wrapper and self.tls_wrapper.config.enabled:
                     try:
-                        client_socket = self.tls_wrapper.wrap_client_socket(client_socket)
+                        client_socket = self.tls_wrapper.wrap_accepted_socket(client_socket)
                     except Exception as e:
                         print(f"[SERVER] TLS handshake failed: {e}")
                         client_socket.close()
@@ -347,12 +318,6 @@ class SocketServer:
             self.socket.close()
         print("[SERVER] Stopped")
 
-
-def main():
-    parser = argparse.ArgumentParser(description='KosDB Socket Server')
-    parser.add_argument('--host', default='0.0.0.0', help='Bind host')
-    parser.add_argument('--port', type=int, default=5555, help='Bind port')
-    parser.add_argument('--data-dir', default='./data', help='Data directory')
 
 def main():
     parser = argparse.ArgumentParser(description='KosDB Socket Server')
@@ -395,7 +360,5 @@ def main():
     server.start()
 
 
-if __name__ == '__main__':
-    main()
 if __name__ == '__main__':
     main()

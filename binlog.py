@@ -8,6 +8,7 @@ Each entry has a position number for tracking replication progress.
 import os
 import json
 import time
+import threading
 from typing import Optional, Dict, Any, List
 import plyvel
 
@@ -23,6 +24,7 @@ class Binlog:
         self.binlog_dir = os.path.join(data_dir, "_binlog")
         self._db: Optional[plyvel.DB] = None
         self._current_position = 0
+        self._lock = threading.Lock()
         self._ensure_db()
         self._load_current_position()
     
@@ -59,24 +61,27 @@ class Binlog:
         Returns:
             Position number of this entry
         """
-        self._current_position += 1
-        position = self._current_position
-        
-        entry = {
-            "position": position,
-            "timestamp": time.time(),
-            "server_id": server_id,
-            "database": database,
-            "operation": operation,
-            "table": table,
-            "data": data
-        }
-        
-        key = f"entry:{position:012d}".encode()
-        self._db.put(key, json.dumps(entry).encode())
-        self._save_position()
-        
-        return position
+        with self._lock:
+            self._current_position += 1
+            position = self._current_position
+            
+            entry = {
+                "position": position,
+                "timestamp": time.time(),
+                "server_id": server_id,
+                "database": database,
+                "operation": operation,
+                "table": table,
+                "data": data
+            }
+            
+            key = f"entry:{position:012d}".encode()
+            # Entry + position written atomically so a crash can't reuse a position
+            with self._db.write_batch(transaction=True) as batch:
+                batch.put(key, json.dumps(entry).encode())
+                batch.put(b"_meta:position", str(position).encode())
+            
+            return position
     
     def get_entries(self, from_position: int, limit: int = 100) -> List[Dict]:
         """

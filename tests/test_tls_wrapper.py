@@ -78,7 +78,8 @@ class TestTLSSocketWrapper(unittest.TestCase):
     def test_wrapper_disabled(self):
         config = TLSConfig(enabled=False)
         wrapper = TLSSocketWrapper(config)
-        self.assertIsNone(wrapper._context)
+        self.assertIsNone(wrapper._server_context)
+        self.assertIsNone(wrapper._client_context)
     
     def test_wrap_server_socket_disabled(self):
         config = TLSConfig(enabled=False)
