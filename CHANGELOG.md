@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-08-01 — v2.3.19
+
+### Auto: Version v2.3.19
+
+- Version auto-incremented from v2.3.18
+- Files changed: .gitignore, PLAN.md
+
+---
+
+
 ## 2026-08-01 — v2.3.18
 
 ### Auto: Version v2.3.18
