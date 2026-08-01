@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-08-01 — v2.3.18
+
+### Auto: Version v2.3.18
+
+- Version auto-incremented from v2.3.17
+- Files changed: specs/NEWPLAN.md
+
+---
+
+
 ## 2026-08-01 — v2.3.17
 
 ### Auto: Version v2.3.17
