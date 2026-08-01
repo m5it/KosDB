@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-08-01 — v2.3.16
+
+### Auto: Version v2.3.16
+
+- Version auto-incremented from v2.3.15
+- Files changed: .gitignore, PLAN.md, background.log, current_task.txt, docs/TESTING.md, plans/1785363770.4581513.json, state.aiia, terminal_audit.log, tests/dev_scripts/add_async_binlog.py, tests/dev_scripts/add_binlog_helper.py, tests/dev_scripts/add_binlog_worker.py, tests/dev_scripts/add_sort_heuristics.py, tests/dev_scripts/add_tradeoff_doc.py, tests/dev_scripts/apply_async_binlog.py, tests/dev_scripts/check_history.py, tests/dev_scripts/check_sizes.py, tests/dev_scripts/extract_8e234ac.py, tests/dev_scripts/extract_baseline.py, tests/dev_scripts/final_validation.py, tests/dev_scripts/integrate_sort_engine.py, tests/dev_scripts/modify_log_binlog.py, tests/dev_scripts/move_remaining_md.py, tests/dev_scripts/organize_files.py, tests/dev_scripts/register_batch_update.py, tests/dev_scripts/replace_binlog_calls.py, tests/dev_scripts/run_all_batch_tests.py, tests/dev_scripts/run_tests.py, tests/dev_scripts/verify_installation.py, tests/dev_scripts/verify_integration.py, tests/dev_scripts/write_all_tests.py, tests/dev_scripts/write_remaining_tests.py, tests/dev_scripts/write_tests.py, tests/fix_scripts/fix_binlog_ref.py, tests/fix_scripts/fix_binlog_startup.py, tests/fix_scripts/fix_bugs.py, tests/fix_scripts/fix_commands.py, tests/fix_scripts/fix_final_test.py, tests/fix_scripts/fix_geospatial_parser.py, tests/fix_scripts/fix_parser.py, tests/fix_scripts/fix_sharding_commands.py, tests/fix_scripts/fix_sort_engine.py, tests/fix_scripts/fix_test_monitoring.py, tests/fix_scripts/fix_test_sharding_commands.py, tests/fix_scripts/fix_tests.py, tests/fix_scripts/fix_upsert_values.py, tests/fix_scripts/fix_worker_bug.py, tests/legacy/commands_8e234ac.py, tests/legacy/commands_baseline.py, tests/test_async_binlog2.py, tests/test_async_binlog3.py, tests/test_async_binlog_final.py, tests/test_batch_update.py, tests/test_concurrent_fixes.py, tests/test_database_integration.py, tests/test_sort_engine.py, tests/test_upsert.py, tests/test_writebatch.py
+
+---
+
+
 ## 2026-08-01 — v2.3.15
 
 ### Auto: Version v2.3.15

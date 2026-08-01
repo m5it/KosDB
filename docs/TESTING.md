@@ -6,6 +6,13 @@ This document describes how to test the replication features of the LevelDB Sock
 
 ## Test Files
 
+- `tests/*.py` - Main automated test suite
+- `tests/legacy/` - Historical snapshots and old baseline files
+- `tests/fix_scripts/` - Temporary repair scripts kept for reference
+- `tests/dev_scripts/` - Development utilities (generators, runners, helpers)
+
+### Notable Tests
+
 - `tests/test_replication.py` - Automated replication test suite
 - `tests/test_client.py` - Basic client functionality tests
 
