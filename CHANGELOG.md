@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-08-02 — v2.3.20
+
+### Auto: Version v2.3.20
+
+- Version auto-incremented from v2.3.19
+- Files changed: PROJECT.md, background.log, current_task.txt, docs/INSTALL.md, install.sh, plans/1785668429.0449312.json, requirements.txt, state.aiia
+
+---
+
+
 ## 2026-08-01 — v2.3.19
 
 ### Auto: Version v2.3.19

@@ -1,6 +1,6 @@
 #!/bin/bash
 # KosDB Master Installation Script
-# Clones and builds all three repositories in correct order
+# Uses system leveldb (with RTTI) for plyvel compatibility
 
 set -e
 
@@ -49,7 +49,7 @@ while [[ $# -gt 0 ]]; do
             echo "Options:"
             echo "  --prefix PATH      Installation prefix (default: /usr/local)"
             echo "  --work-dir PATH    Working directory for clones (default: .deps)"
-            echo "  --skip-leveldb     Skip LevelDB build (if already installed)"
+            echo "  --skip-leveldb     Skip system leveldb check/install"
             echo "  --skip-plyvel      Skip Plyvel build (if already installed)"
             echo "  --help             Show this help message"
             exit 0
@@ -66,11 +66,6 @@ echo -e "${BLUE}Checking prerequisites...${NC}"
 
 if ! command -v git &> /dev/null; then
     echo -e "${RED}Error: git is required${NC}"
-    exit 1
-fi
-
-if ! command -v cmake &> /dev/null; then
-    echo -e "${RED}Error: cmake is required${NC}"
     exit 1
 fi
 
@@ -91,27 +86,29 @@ fi
 mkdir -p "$WORK_DIR"
 cd "$WORK_DIR"
 
-# Step 1: Build LevelDB
+# Step 1: Ensure system LevelDB is installed
 if [[ -z "$SKIP_LEVELDB" ]]; then
     echo ""
-    echo -e "${BLUE}Step 1/3: Building LevelDB...${NC}"
+    echo -e "${BLUE}Step 1/3: Ensuring system LevelDB is installed...${NC}"
     
-    if [ -d "leveldb_for_KosDB" ]; then
-        echo "Updating existing leveldb_for_KosDB..."
-        cd leveldb_for_KosDB && git pull && cd ..
-    else
-        echo "Cloning leveldb_for_KosDB..."
-        git clone https://github.com/m5it/leveldb_for_KosDB.git
+    if [[ "$EUID" -eq 0 ]]; then
+        apt-get update && apt-get install -y libleveldb-dev || true
+    elif command -v apt-get &> /dev/null; then
+        echo -e "${YELLOW}⚠ apt-get available but not running as root${NC}"
+        echo "Please run manually if leveldb is missing:"
+        echo "  sudo apt-get install libleveldb-dev"
     fi
     
-    cd leveldb_for_KosDB
-    echo "Building LevelDB..."
-    ./build.sh --prefix "$INSTALL_PREFIX"
-    cd ..
+    # Verify system leveldb is usable
+    if [[ ! -f "/usr/include/leveldb/db.h" && ! -f "/usr/local/include/leveldb/db.h" ]]; then
+        echo -e "${RED}Error: leveldb headers not found${NC}"
+        echo "Install with: sudo apt-get install libleveldb-dev"
+        exit 1
+    fi
     
-    echo -e "${GREEN}✓ LevelDB built and installed${NC}"
+    echo -e "${GREEN}✓ System LevelDB available${NC}"
 else
-    echo -e "${YELLOW}Skipping LevelDB build (--skip-leveldb)${NC}"
+    echo -e "${YELLOW}Skipping LevelDB check (--skip-leveldb)${NC}"
 fi
 
 # Step 2: Install Plyvel
@@ -128,8 +125,18 @@ if [[ -z "$SKIP_PLYVEL" ]]; then
     fi
     
     cd plyvel_for_KosDB
-    echo "Installing Plyvel..."
-    ./install.sh
+    
+    echo "Installing Cython (required to generate plyvel C++ source)..."
+    pip install cython
+    
+    echo "Generating plyvel C++ source from Cython..."
+    cython --cplus plyvel/_plyvel.pyx
+    
+    echo "Building and installing Plyvel against system leveldb..."
+    rm -rf build
+    python setup.py build_ext --inplace
+    pip install --no-build-isolation --force-reinstall .
+    
     cd ..
     
     echo -e "${GREEN}✓ Plyvel installed${NC}"

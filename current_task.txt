@@ -1,8 +1,4 @@
-Plan: Organize Root Test and Fix Files into tests/
-Progress: 15/16 completed (0 blocked)
---- Current Task ---
-ID: 1785620193.2557285
-Title: Final verification and summary
-Instruction: List the repository root and tests/ directory to confirm files were moved correctly. Provide a summary of what was moved and where.
-Status: in_progress
-Updated: 2026-08-01 21:39:07
+Plan: Fix KosDB Installation to Use System LevelDB
+Progress: 4/4 completed (0 blocked)
+No task in progress.
+Updated: 2026-08-02 11:01:33

@@ -4,15 +4,54 @@ Complete installation guide for KosDB and its dependencies.
 
 ## Overview
 
-KosDB consists of three repositories that must be installed in order:
+KosDB uses the **system LevelDB** library (`libleveldb-dev`) for compatibility
+with plyvel. The custom `leveldb_for_KosDB` fork is no longer required for the
+standard installation because the system library is built with RTTI, which plyvel
+needs.
 
-1. **leveldb_for_KosDB** - C++ LevelDB library
+Components installed:
+
+1. **System LevelDB** - via `apt-get install libleveldb-dev`
 2. **plyvel_for_KosDB** - Python bindings for LevelDB  
 3. **KosDB** - Main database server application
 
 ## Quick Start (Automated)
 
 For automated installation of all components:
+
+```bash
+# Clone KosDB
+git clone https://github.com/m5it/KosDB.git
+cd KosDB
+
+# Run master installation script
+./install.sh
+```
+
+This will:
+- Ensure system LevelDB development headers are installed
+- Install plyvel_for_KosDB (using Cython to generate its C++ source)
+- Set up KosDB with virtual environment
+- Verify installation
+
+## Manual Installation
+
+### Step 1: Install System LevelDB
+
+```bash
+sudo apt-get update
+sudo apt-get install libleveldb-dev
+```
+
+The system LevelDB provides `/usr/include/leveldb/` headers and
+`/usr/lib/x86_64-linux-gnu/libleveldb.so`, which plyvel links against.
+
+### Step 1a (Optional): Custom LevelDB Build
+
+If you prefer to build LevelDB from source, use the upstream repository or the
+`leveldb_for_KosDB` fork. Note that the fork builds with `-fno-rtti` by default,
+which is incompatible with plyvel's comparator subclass. In that case, rebuild
+LevelDB with RTTI enabled or use the system library instead.
 
 ```bash
 # Clone KosDB

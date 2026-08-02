@@ -1,0 +1,50 @@
+{
+  "id": "1785668429.0449312",
+  "title": "Fix KosDB Installation to Use System LevelDB",
+  "instructions": "Update the KosDB installation process so it uses the system leveldb (with RTTI) instead of building the leveldb_for_KosDB fork, which avoids the plyvel undefined symbol error. Also ensure Cython is available for the plyvel build.",
+  "startTimestamp": 1785668429.0449338,
+  "endTimestamp": 1785668493.6133473,
+  "tasks": {
+    "1785668429.0451014": {
+      "id": "1785668429.0451014",
+      "status": "completed",
+      "instruction": "Modify install.sh to install system leveldb via apt (or check it exists), skip the leveldb_for_KosDB fork build, and build plyvel_for_KosDB against the system leveldb. Add Cython installation before building plyvel.",
+      "startTimestamp": 1785668429.046441,
+      "endTimestamp": 1785668443.6869814,
+      "log": [
+        {
+          "timestamp": 1785668429.0464876,
+          "text": "Build started"
+        },
+        {
+          "timestamp": 1785668429.0471356,
+          "text": "Build started"
+        }
+      ]
+    },
+    "1785668429.046124": {
+      "id": "1785668429.046124",
+      "status": "completed",
+      "instruction": "Add cython as a build dependency in requirements.txt (or a separate build requirement note) since plyvel needs it to generate _plyvel.cpp from _plyvel.pyx.",
+      "startTimestamp": 1785668443.6869853,
+      "endTimestamp": 1785668451.910722,
+      "log": []
+    },
+    "1785668429.0462358": {
+      "id": "1785668429.0462358",
+      "status": "completed",
+      "instruction": "Add a note in the installation documentation explaining that system leveldb is used and the fork build is not required.",
+      "startTimestamp": 1785668451.910724,
+      "endTimestamp": 1785668467.1173193,
+      "log": []
+    },
+    "1785668429.0463371": {
+      "id": "1785668429.0463371",
+      "status": "completed",
+      "instruction": "Read back install.sh and requirements.txt to confirm changes are correct and consistent.",
+      "startTimestamp": 1785668467.1173203,
+      "endTimestamp": 1785668493.613202,
+      "log": []
+    }
+  }
+}
