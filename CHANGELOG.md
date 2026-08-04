@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-08-04 — v2.3.21
+
+### Auto: Version v2.3.21
+
+- Version auto-incremented from v2.3.20
+- Files changed: .deps/leveldb_for_KosDB, .deps/plyvel_for_KosDB, background.log, commands.py, parser.py
+
+---
+
+
 ## 2026-08-02 — v2.3.20
 
 ### Auto: Version v2.3.20

@@ -170,8 +170,12 @@ class SelectCommand(Command):
             where = params.get('where')
             order_by = params.get('order_by')
             order_desc = params.get('order_desc', False)
-            result = self.db.select(params['table'], columns, where, order_by, order_desc)
-            return result
+            raw = self.db.select(params['table'], columns, where, order_by, order_desc, raw=True)
+            if isinstance(raw, str):
+                return raw
+            if client_state.get('json_format'):
+                return self.db._format_results_json(columns, raw)
+            return self.db._format_results(columns, raw)
         except Exception as e:
             return f"ERROR: {e}"
 
@@ -207,6 +211,16 @@ class DeleteCommand(Command):
             return f"ERROR: {result}"
         except Exception as e:
             return f"ERROR: {e}"
+
+
+class SetCommand(Command):
+    def execute(self, params, client_state):
+        option = params.get('option', '').upper()
+        value = params.get('value', '').upper()
+        if option == 'JSON':
+            client_state['json_format'] = (value == 'ON')
+            return f"OK: JSON format {'enabled' if value == 'ON' else 'disabled'}"
+        return f"ERROR: Unknown SET option '{option}'"
 
 
 class ShowTablesCommand(Command):
@@ -435,6 +449,7 @@ class CommandRegistry:
             'UPSERT': UpsertCommand(self.db, self.replication_client),
             'BATCH_UPDATE': BatchUpdateCommand(self.db, self.replication_client),
             'DELETE': DeleteCommand(self.db, self.replication_client),
+            'SET': SetCommand(self.db, self.replication_client),
             'SHOW_TABLES': ShowTablesCommand(self.db, self.replication_client),
             'SHOW_DATABASES': ShowDatabasesCommand(self.db, self.replication_client),
             'SHOW_USERS': ShowUsersCommand(self.db, self.replication_client),

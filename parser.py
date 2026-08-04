@@ -1,9 +1,9 @@
-
 """
 SQL-like Command Parser for LevelDB Socket Server
 """
 
 import re
+import json
 from typing import Dict, Any, Optional, Tuple, List
 
 
@@ -37,6 +37,10 @@ class CommandParser:
             ),
             'UPDATE': re.compile(
                 r'^\s*UPDATE\s+(?P<table>\w+)\s+SET\s+(?P<set>.+?)(?:\s+WHERE\s+(?P<where>.+))?\s*$',
+                re.IGNORECASE
+            ),
+            'SET': re.compile(
+                r'^\s*SET\s+(?P<option>\w+)\s+(?P<value>\w+)\s*$',
                 re.IGNORECASE
             ),
             'BATCH_UPDATE': re.compile(
@@ -262,32 +266,71 @@ class CommandParser:
         return result
     
     def _parse_set_clause(self, set_str: str) -> Dict[str, Any]:
-        """Parse SET clause into dict of column=value pairs"""
+        """Parse SET clause into dict of column=value pairs, respecting quoted JSON."""
         result = {}
-        assignments = [a.strip() for a in set_str.split(',')]
+        current_col = None
+        current_val = ''
+        in_string = False
+        string_char = None
+        depth = 0
+        state = 'col'
         
-        for assignment in assignments:
-            if '=' in assignment:
-                col, val = assignment.split('=', 1)
-                col = col.strip()
-                val = val.strip()
-                
-                # Try to convert value
-                try:
-                    if '.' in val:
-                        val = float(val)
-                    else:
-                        val = int(val)
-                except ValueError:
-                    # Keep as string, remove quotes if present
-                    if (val.startswith("'") and val.endswith("'")) or \
-                       (val.startswith('"') and val.endswith('"')):
-                        val = val[1:-1]
-                
-                result[col] = val
+        for char in set_str:
+            if state == 'col':
+                if char == '=':
+                    current_col = current_val.strip()
+                    current_val = ''
+                    state = 'val'
+                else:
+                    current_val += char
+            else:
+                if char in ("'", '"') and not in_string:
+                    in_string = True
+                    string_char = char
+                    current_val += char
+                elif char == string_char and in_string:
+                    in_string = False
+                    string_char = None
+                    current_val += char
+                elif char in ('[', '{') and not in_string:
+                    depth += 1
+                    current_val += char
+                elif char in (']', '}') and not in_string:
+                    depth -= 1
+                    current_val += char
+                elif char == ',' and not in_string and depth == 0:
+                    if current_col is not None:
+                        result[current_col] = self._clean_value(current_val.strip())
+                    current_val = ''
+                    state = 'col'
+                else:
+                    current_val += char
+        
+        if current_col is not None:
+            result[current_col] = self._clean_value(current_val.strip())
         
         return result
     
+    def _clean_value(self, val: str) -> Any:
+        """Clean and convert a value string."""
+        val = val.strip()
+        if (val.startswith("'") and val.endswith("'")) or \
+           (val.startswith('"') and val.endswith('"')):
+            val = val[1:-1]
+        try:
+            if '.' in val:
+                return float(val)
+            else:
+                return int(val)
+        except ValueError:
+            pass
+        try:
+            if val.startswith('[') or val.startswith('{'):
+                return json.loads(val)
+        except (json.JSONDecodeError, TypeError):
+            pass
+        return val
+
     def _parse_where_clause(self, where_str: str) -> Dict[str, Any]:
         """Parse WHERE clause into conditions"""
         conditions = {}
