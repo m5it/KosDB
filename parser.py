@@ -10,33 +10,44 @@ from typing import Dict, Any, Optional, Tuple, List
 class CommandParser:
     """Parse SQL-like commands for LevelDB operations"""
     
+    # Identifier that may be backtick-quoted, e.g. `name` or name
+    _IDENT = r"`?\w+`?"
+    # Optional database prefix: db.table or `db`.`table`
+    _TABLE_REF = rf"(?:{_IDENT}\.)?{_IDENT}"
+    
     def __init__(self):
+        table_ref = self._TABLE_REF
+        ident = self._IDENT
         self.patterns = {
             'CREATE': re.compile(
-                r'^\s*CREATE\s+TABLE\s+(?P<table>\w+)(?:\s*\((?P<columns>[^)]+)\))?\s*$',
+                rf'^\s*CREATE\s+TABLE\s+(?P<table>{table_ref})(?:\s*\((?P<columns>[^)]+)\))?\s*$',
+                re.IGNORECASE
+            ),
+            'ALTER_TABLE': re.compile(
+                rf'^\s*ALTER\s+TABLE\s+(?P<table>{table_ref})\s+MODIFY\s+COLUMN\s+(?P<column>{ident})\s+(?P<type>\w+)\s*(?P<attr>.*)$',
                 re.IGNORECASE
             ),
             'DROP': re.compile(
-                r'^\s*DROP\s+TABLE\s+(?P<table>\w+)\s*$',
+                rf'^\s*DROP\s+TABLE\s+(?P<table>{table_ref})\s*$',
                 re.IGNORECASE
             ),
 
             'INSERT': re.compile(
-                r'^\s*INSERT\s+INTO\s+(?P<table>\w+)(?:\s*\((?P<columns>[^)]+)\))?\s+VALUES\s*\((?P<values>[^)]+)\)\s*$',
+                rf'^\s*INSERT\s+INTO\s+(?P<table>{table_ref})(?:\s*\((?P<columns>[^)]+)\))?\s+VALUES\s*\((?P<values>[^)]+)\)\s*$',
                 re.IGNORECASE
             ),
             'UPSERT': re.compile(
-                r'^\s*UPSERT\s+INTO\s+(?P<table>\w+)(?:\s*\((?P<columns>[^)]+)\))?\s+VALUES\s*\((?P<values>[^)]+)\)\s*$',
+                rf'^\s*UPSERT\s+INTO\s+(?P<table>{table_ref})(?:\s*\((?P<columns>[^)]+)\))?\s+VALUES\s*\((?P<values>[^)]+)\)\s*$',
                 re.IGNORECASE
             ),
             'SELECT': re.compile(
-                r'^\s*SELECT\s+(?P<columns>[\w\s*,]+)\s+FROM\s+(?P<table>\w+)'
-                r'(?:\s+WHERE\s+(?P<where>.+?))?'
-                r'(?:\s+ORDER\s+BY\s+(?P<order_by>\w+)(?:\s+(?P<order_dir>ASC|DESC))?)?\s*$',
+                rf'^\s*SELECT\s+(?P<columns>[\w\s*,]+)\s+FROM\s+(?P<table>{table_ref})'
+                rf'(?:\s+WHERE\s+(?P<where>.+?))?'
+                rf'(?:\s+ORDER\s+BY\s+(?P<order_by>\w+)(?:\s+(?P<order_dir>ASC|DESC))?)?\s*$',
                 re.IGNORECASE
             ),
             'UPDATE': re.compile(
-                r'^\s*UPDATE\s+(?P<table>\w+)\s+SET\s+(?P<set>.+?)(?:\s+WHERE\s+(?P<where>.+))?\s*$',
+                rf'^\s*UPDATE\s+(?P<table>{table_ref})\s+SET\s+(?P<set>.+?)(?:\s+WHERE\s+(?P<where>.+))?\s*$',
                 re.IGNORECASE
             ),
             'SET': re.compile(
@@ -44,23 +55,23 @@ class CommandParser:
                 re.IGNORECASE
             ),
             'BATCH_UPDATE': re.compile(
-                r'^\s*BATCH\s+UPDATE\s+(?P<table>\w+)\s+SET\s+(?P<set>.+?)\s+WHERE\s+(?P<where_col>\w+)\s+IN\s*\((?P<where_values>[^)]+)\)\s*$',
+                rf'^\s*BATCH\s+UPDATE\s+(?P<table>{table_ref})\s+SET\s+(?P<set>.+?)\s+WHERE\s+(?P<where_col>\w+)\s+IN\s*\((?P<where_values>[^)]+)\)\s*$',
                 re.IGNORECASE
             ),
             'DELETE': re.compile(
-                r'^\s*DELETE\s+FROM\s+(?P<table>\w+)(?:\s+WHERE\s+(?P<where>.+))?\s*$',
+                rf'^\s*DELETE\s+FROM\s+(?P<table>{table_ref})(?:\s+WHERE\s+(?P<where>.+))?\s*$',
                 re.IGNORECASE
             ),
             'USE': re.compile(
-                r'^\s*USE\s+(?P<database>\w+)\s*$',
+                rf'^\s*USE\s+(?P<database>{ident})\s*$',
                 re.IGNORECASE
             ),
             'CREATE_DB': re.compile(
-                r'^\s*CREATE\s+DATABASE\s+(?P<database>\w+)\s*$',
+                rf'^\s*CREATE\s+DATABASE\s+(?P<database>{ident})\s*$',
                 re.IGNORECASE
             ),
             'DROP_DB': re.compile(
-                r'^\s*DROP\s+DATABASE\s+(?P<database>\w+)\s*$',
+                rf'^\s*DROP\s+DATABASE\s+(?P<database>{ident})\s*$',
                 re.IGNORECASE
             ),
             'SHOW_TABLES': re.compile(
@@ -108,7 +119,7 @@ class CommandParser:
                 re.IGNORECASE
             ),
             'BACKUP': re.compile(
-                r'^\s*BACKUP\s+(?:TABLE\s+(?P<table>\w+)|DATABASE\s+(?P<database>\w+))?\s+TO\s+["\']?(?P<file>[^"\']+)["\']?\s*$',
+                rf'^\s*BACKUP\s+(?:TABLE\s+(?P<table>{table_ref})|DATABASE\s+(?P<database>{ident}))?\s+TO\s+["\']?(?P<file>[^"\']+)["\']?\s*$',
                 re.IGNORECASE
             ),
             'RESTORE': re.compile(
@@ -149,6 +160,14 @@ class CommandParser:
             ),
             'BATCH_STATUS': re.compile(
                 r'^\s*BATCH\s+STATUS(?:\s+(?P<batch_id>[\w-]+))?\s*$',
+                re.IGNORECASE
+            ),
+            'DESCRIBE': re.compile(
+                rf'^\s*(?:DESCRIBE|DESC|SHOW\s+CREATE\s+TABLE)\s+(?P<table>{table_ref})\s*$',
+                re.IGNORECASE
+            ),
+            'SET_TABLE': re.compile(
+                rf'^\s*SET\s+TABLE\s+(?P<table>{table_ref})\s+next_id\s+(?P<next_id>\d+)\s*$',
                 re.IGNORECASE
             ),
         }
@@ -199,9 +218,12 @@ class CommandParser:
             if match:
                 params = match.groupdict()
                 
+                # Strip backticks from identifiers and split db.table references
+                self._normalize_identifiers(params)
+                
                 # Parse columns if present
                 if 'columns' in params and params['columns']:
-                    params['columns'] = [c.strip() for c in params['columns'].split(',')]
+                    params['columns'] = [self._strip_backticks(c.strip()) for c in params['columns'].split(',')]
                 
                 # Parse values if present
                 if 'values' in params and params['values']:
@@ -222,7 +244,36 @@ class CommandParser:
                 return cmd_type, params
         
         return 'UNKNOWN', None
+
+    @staticmethod
+    def _strip_backticks(value: Optional[str]) -> Optional[str]:
+        if not value:
+            return value
+        return value.strip('`')
     
+    def _normalize_identifiers(self, params: Dict[str, Any]):
+        """Strip backticks and split db.table references."""
+        # Database names
+        for key in ('database', 'target', 'path'):
+            if key in params and params[key]:
+                params[key] = self._strip_backticks(params[key])
+        
+        # Table references may include an optional database prefix.
+        # Strip backticks from each part separately to handle `db`.`table`.
+        if 'table' in params and params['table']:
+            table_ref = params['table']
+            if '.' in table_ref:
+                db_name, table_name = table_ref.split('.', 1)
+                params['database'] = self._strip_backticks(db_name)
+                params['table'] = self._strip_backticks(table_name)
+            else:
+                params['table'] = self._strip_backticks(table_ref)
+        
+        # Column names
+        for key in ('column', 'where_col', 'order_by', 'username', 'password'):
+            if key in params and params[key]:
+                params[key] = self._strip_backticks(params[key])
+        
     def _parse_values(self, values_str: str) -> list:
         """Parse VALUES clause into list of values"""
         values = []
@@ -278,7 +329,7 @@ class CommandParser:
         for char in set_str:
             if state == 'col':
                 if char == '=':
-                    current_col = current_val.strip()
+                    current_col = current_val.strip().strip('`')
                     current_val = ''
                     state = 'val'
                 else:
@@ -301,6 +352,7 @@ class CommandParser:
                 elif char == ',' and not in_string and depth == 0:
                     if current_col is not None:
                         result[current_col] = self._clean_value(current_val.strip())
+                    current_col = None
                     current_val = ''
                     state = 'col'
                 else:
@@ -330,7 +382,7 @@ class CommandParser:
         except (json.JSONDecodeError, TypeError):
             pass
         return val
-
+    
     def _parse_where_clause(self, where_str: str) -> Dict[str, Any]:
         """Parse WHERE clause into conditions"""
         conditions = {}
@@ -339,7 +391,7 @@ class CommandParser:
         for part in parts:
             if '=' in part:
                 col, val = part.split('=', 1)
-                col = col.strip()
+                col = col.strip().strip('`')
                 val = val.strip()
                 
                 # Try to convert value
@@ -361,7 +413,7 @@ class CommandParser:
 
 class BackupRestoreParser(CommandParser):
     """Extended parser with backup/restore/transaction/batch commands."""
-    
+
     def __init__(self):
         super().__init__()
         # Additional patterns are already included in base parser

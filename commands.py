@@ -24,6 +24,16 @@ class Command:
             if param not in params or params[param] is None:
                 return False
         return True
+    
+    def _ensure_database(self, params: Dict[str, Any], client_state: Dict[str, Any]) -> Optional[str]:
+        """Switch to the database from params if provided, otherwise use current."""
+        db_name = params.get('database')
+        if db_name:
+            result = self.db.use_database(db_name)
+            if not result.startswith("Switched") and "already" not in result.lower():
+                return f"ERROR: {result}"
+            client_state['current_db'] = db_name
+        return None
 
 
 class BatchStatusCommand(Command):
@@ -110,6 +120,9 @@ class CreateTableCommand(Command):
     def execute(self, params, client_state):
         if not self.validate_params(params, ['table']):
             return "ERROR: Table name required"
+        err = self._ensure_database(params, client_state)
+        if err:
+            return err
         if not client_state.get('current_db'):
             return "ERROR: No database selected"
         try:
@@ -126,6 +139,9 @@ class DropTableCommand(Command):
     def execute(self, params, client_state):
         if not self.validate_params(params, ['table']):
             return "ERROR: Table name required"
+        err = self._ensure_database(params, client_state)
+        if err:
+            return err
         if not client_state.get('current_db'):
             return "ERROR: No database selected"
         try:
@@ -140,6 +156,9 @@ class InsertCommand(Command):
     def execute(self, params, client_state):
         if not self.validate_params(params, ['table', 'values']):
             return "ERROR: Table and values required"
+        err = self._ensure_database(params, client_state)
+        if err:
+            return err
         if not client_state.get('current_db'):
             return "ERROR: No database selected"
         try:
@@ -163,6 +182,9 @@ class SelectCommand(Command):
     def execute(self, params, client_state):
         if not self.validate_params(params, ['table']):
             return "ERROR: Table name required"
+        err = self._ensure_database(params, client_state)
+        if err:
+            return err
         if not client_state.get('current_db'):
             return "ERROR: No database selected"
         try:
@@ -184,6 +206,9 @@ class UpdateCommand(Command):
     def execute(self, params, client_state):
         if not self.validate_params(params, ['table', 'set']):
             return "ERROR: Table and SET required"
+        err = self._ensure_database(params, client_state)
+        if err:
+            return err
         if not client_state.get('current_db'):
             return "ERROR: No database selected"
         try:
@@ -200,6 +225,9 @@ class DeleteCommand(Command):
     def execute(self, params, client_state):
         if not self.validate_params(params, ['table']):
             return "ERROR: Table name required"
+        err = self._ensure_database(params, client_state)
+        if err:
+            return err
         if not client_state.get('current_db'):
             return "ERROR: No database selected"
         try:
@@ -250,6 +278,98 @@ class ShowUsersCommand(Command):
         try:
             users = self.db.list_users()
             return "OK:\n" + "\n".join(users) if users else "OK: No users"
+        except Exception as e:
+            return f"ERROR: {e}"
+
+
+class DescribeCommand(Command):
+    """Return the JSON schema for a table."""
+    def execute(self, params, client_state):
+        table = params.get('table')
+        if not table:
+            return "ERROR: Table name required"
+        err = self._ensure_database(params, client_state)
+        if err:
+            return err
+        if not client_state.get('current_db'):
+            return "ERROR: No database selected"
+        try:
+            schema = self.db.get_schema(table)
+            if not schema:
+                return f"ERROR: Table '{table}' does not exist"
+            return json.dumps(schema)
+        except Exception as e:
+            return f"ERROR: {e}"
+
+
+class SetTableCommand(Command):
+    """Update a table-level option (currently only next_id)."""
+    def execute(self, params, client_state):
+        table = params.get('table')
+        if not table:
+            return "ERROR: Table name required"
+        err = self._ensure_database(params, client_state)
+        if err:
+            return err
+        if not client_state.get('current_db'):
+            return "ERROR: No database selected"
+        try:
+            next_id = int(params.get('next_id', 0))
+        except ValueError:
+            return "ERROR: next_id must be an integer"
+        try:
+            schema = self.db.get_schema(table)
+            if not schema:
+                return f"ERROR: Table '{table}' does not exist"
+            schema['next_id'] = next_id
+            self.db._db.put(f"_schema:{table}".encode(), json.dumps(schema).encode())
+            return f"OK: Table '{table}' next_id set to {next_id}"
+        except Exception as e:
+            return f"ERROR: {e}"
+
+
+class AlterTableCommand(Command):
+    """Modify a column's attribute (PRIMARY KEY, INDEX, AUTO_INCREMENT)."""
+    def execute(self, params, client_state):
+        table = params.get('table')
+        column = params.get('column')
+        col_type = params.get('type', '')
+        attr = (params.get('attr') or '').strip().upper()
+        if not table or not column:
+            return "ERROR: Table and column name required"
+        err = self._ensure_database(params, client_state)
+        if err:
+            return err
+        if not client_state.get('current_db'):
+            return "ERROR: No database selected"
+        try:
+            schema = self.db.get_schema(table)
+            if not schema:
+                return f"ERROR: Table '{table}' does not exist"
+            if column not in schema['columns']:
+                return f"ERROR: Column '{column}' does not exist in '{table}'"
+
+            if attr.startswith('PRIMARY'):
+                attr = 'PRIMARY KEY'
+
+            if attr in ('PRIMARY KEY', 'PK'):
+                schema['primary_key'] = column
+            elif attr in ('INDEX', 'IDX'):
+                if column not in schema['indexes']:
+                    schema['indexes'].append(column)
+            elif attr in ('AUTO_INCREMENT', 'AUTOINCREMENT', 'AUTO'):
+                schema['primary_key'] = column
+                # Auto-increment implies a primary key
+            elif attr in ('NONE', ''):
+                if schema.get('primary_key') == column:
+                    schema['primary_key'] = None
+                if column in schema['indexes']:
+                    schema['indexes'].remove(column)
+            else:
+                return f"ERROR: Unknown attribute '{attr}'"
+
+            self.db._db.put(f"_schema:{table}".encode(), json.dumps(schema).encode())
+            return f"OK: Column '{column}' modified"
         except Exception as e:
             return f"ERROR: {e}"
 
@@ -453,6 +573,9 @@ class CommandRegistry:
             'SHOW_TABLES': ShowTablesCommand(self.db, self.replication_client),
             'SHOW_DATABASES': ShowDatabasesCommand(self.db, self.replication_client),
             'SHOW_USERS': ShowUsersCommand(self.db, self.replication_client),
+            'DESCRIBE': DescribeCommand(self.db, self.replication_client),
+            'SET_TABLE': SetTableCommand(self.db, self.replication_client),
+            'ALTER_TABLE': AlterTableCommand(self.db, self.replication_client),
             'BATCH_STATUS': BatchStatusCommand(self.db, self.replication_client),
             'HELP': HelpCommand(self.db, self.replication_client),
         }
