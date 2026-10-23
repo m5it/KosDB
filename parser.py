@@ -66,6 +66,10 @@ class CommandParser:
                 rf'^\s*USE\s+(?P<database>{ident})\s*$',
                 re.IGNORECASE
             ),
+            'DESCRIBE': re.compile(
+                rf'^\s*(?:DESCRIBE|DESC)\s+(?P<table>{table_ref})\s*$',
+                re.IGNORECASE
+            ),
             'CREATE_DB': re.compile(
                 rf'^\s*CREATE\s+DATABASE\s+(?P<database>{ident})\s*$',
                 re.IGNORECASE
@@ -250,14 +254,14 @@ class CommandParser:
         if not value:
             return value
         return value.strip('`')
-    
+
     def _normalize_identifiers(self, params: Dict[str, Any]):
         """Strip backticks and split db.table references."""
         # Database names
         for key in ('database', 'target', 'path'):
             if key in params and params[key]:
                 params[key] = self._strip_backticks(params[key])
-        
+
         # Table references may include an optional database prefix.
         # Strip backticks from each part separately to handle `db`.`table`.
         if 'table' in params and params['table']:
@@ -268,12 +272,12 @@ class CommandParser:
                 params['table'] = self._strip_backticks(table_name)
             else:
                 params['table'] = self._strip_backticks(table_ref)
-        
+
         # Column names
         for key in ('column', 'where_col', 'order_by', 'username', 'password'):
             if key in params and params[key]:
                 params[key] = self._strip_backticks(params[key])
-        
+
     def _parse_values(self, values_str: str) -> list:
         """Parse VALUES clause into list of values"""
         values = []
