@@ -126,10 +126,14 @@ class CreateTableCommand(Command):
         if not client_state.get('current_db'):
             return "ERROR: No database selected"
         try:
+            table = params['table']
+            # If table exists, drop and recreate it (useful for import dumps).
+            if self.db.get_schema(table):
+                self.db.drop_table(table)
             columns = params.get('columns', [])
-            result = self.db.create_table(params['table'], columns)
+            result = self.db.create_table(table, columns)
             if result and 'created' in result:
-                return f"OK: Table '{params['table']}' created"
+                return f"OK: Table '{table}' created"
             return f"ERROR: {result}"
         except Exception as e:
             return f"ERROR: {e}"
@@ -145,6 +149,9 @@ class DropTableCommand(Command):
         if not client_state.get('current_db'):
             return "ERROR: No database selected"
         try:
+            schema = self.db.get_schema(params['table'])
+            if not schema:
+                return f"OK: Table '{params['table']}' does not exist"
             self.db.drop_table(params['table'])
             return f"OK: Table '{params['table']}' dropped"
         except Exception as e:

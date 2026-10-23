@@ -28,7 +28,7 @@ class CommandParser:
                 re.IGNORECASE
             ),
             'DROP': re.compile(
-                rf'^\s*DROP\s+TABLE\s+(?P<table>{table_ref})\s*$',
+                rf'^\s*DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?P<table>{table_ref})\s*$',
                 re.IGNORECASE
             ),
 

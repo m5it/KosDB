@@ -329,6 +329,9 @@ def main():
     parser.add_argument('--tls-key', help='TLS key file')
     parser.add_argument('--prepare-admin', help='Create admin user')
     parser.add_argument('--prepare-password', help='Admin password')
+    parser.add_argument('--export', help='Export database or database.table')
+    parser.add_argument('--export-to', help='Output file for export')
+    parser.add_argument('--import', dest='import_file', help='Import SQL dump file')
     
     args = parser.parse_args()
     
@@ -340,6 +343,22 @@ def main():
             print(f"User '{args.prepare_admin}' already exists")
         else:
             print(f"User '{args.prepare_admin}' created")
+        return
+    
+    # Handle export
+    if args.export:
+        from export_import import KosDBExporter
+        exporter = KosDBExporter(args.data_dir)
+        print(exporter.export(args.export, args.export_to))
+        exporter.close()
+        return
+    
+    # Handle import
+    if args.import_file:
+        from export_import import KosDBImporter
+        importer = KosDBImporter(args.data_dir)
+        print(importer.import_sql(args.import_file))
+        importer.close()
         return
     
     # Setup TLS
