@@ -33,12 +33,13 @@ from auth import Authenticator
 
 
 class ClientHandler(threading.Thread):
-    def __init__(self, client_socket, address, db, authenticator, replication_client=None, tls_wrapper=None):
+    def __init__(self, client_socket, address, db, authenticator, server_lock, replication_client=None, tls_wrapper=None):
         super().__init__(daemon=True)
         self.client_socket = client_socket
         self.address = address
         self.db = db  # Reference to shared Database instance
         self.authenticator = authenticator
+        self.server_lock = server_lock
         self.parser = BackupRestoreParser()
         self.commands = CommandRegistry(db, replication_client)
         self.authenticated = False
@@ -54,35 +55,120 @@ class ClientHandler(threading.Thread):
         self.running = True
         self.tls_wrapper = tls_wrapper
         self.tls_enabled = tls_wrapper is not None and tls_wrapper.config.enabled
+        self._read_buffer = b""
     
     def get_connection_info(self):
         if not self.tls_enabled:
             return {'encrypted': False, 'protocol': 'plain'}
         return {'encrypted': True}
     
-    def send(self, message):
-        self.client_socket.sendall(message.encode() + b'\n')
+    def send(self, message, use_framing=None):
+        payload = message.encode()
+        if use_framing is None:
+            use_framing = self.client_state.get('framing', False)
+        if use_framing:
+            header = f"{len(payload)}\n".encode()
+            self.client_socket.sendall(header + payload + b'\n')
+        else:
+            self.client_socket.sendall(payload + b'\n')
     
-    def receive(self):
-        # Increased from 4096 to 65536 for better handling of large result sets
-        # Reduces round-trips for large responses and prevents fragmentation
-        data = self.client_socket.recv(65536)
-        return data.decode().strip() if data else None
+    def receive(self, use_framing=None):
+        if use_framing is None:
+            use_framing = self.client_state.get('framing', False)
+        try:
+            if use_framing:
+                return self._receive_framed()
+            return self._receive_line()
+        except Exception as e:
+            # TLS sockets can raise on connection close; treat as disconnect.
+            print(f"[SERVER] Receive error: {e}")
+            return None
     
-    def receive_pipeline(self):
+    def _read_buffer_until(self, marker: bytes) -> bytes:
+        """Return data up to (excluding) marker, leaving marker+rest buffered."""
+        buffer = getattr(self, "_read_buffer", b"")
+        self._read_buffer = b""
+        while marker not in buffer:
+            try:
+                chunk = self.client_socket.recv(4096)
+            except ssl.SSLWantReadError:
+                # TLS handshake in progress; retry shortly.
+                import time
+                time.sleep(0.01)
+                continue
+            if not chunk:
+                return buffer
+            buffer += chunk
+        result, _, leftover = buffer.partition(marker)
+        if leftover:
+            self._read_buffer = leftover
+        return result
+
+    def _receive_line(self):
+        """Read a single newline-terminated line."""
+        data = self._read_buffer_until(b"\n")
+        if data is None:
+            return None
+        return data.decode().strip()
+
+    def _receive_framed(self):
+        """Read a length-prefixed framed message."""
+        # Read header line containing the payload length.
+        header = self._read_buffer_until(b"\n")
+        if not header:
+            return None
+        try:
+            length = int(header.decode().strip())
+        except ValueError:
+            return None
+        if length < 0:
+            return None
+
+        # Read exactly length bytes.
+        buffer = getattr(self, "_read_buffer", b"")
+        self._read_buffer = b""
+        while len(buffer) < length:
+            try:
+                chunk = self.client_socket.recv(max(4096, length - len(buffer)))
+            except ssl.SSLWantReadError:
+                import time
+                time.sleep(0.01)
+                continue
+            if not chunk:
+                return None
+            buffer += chunk
+
+        payload = buffer[:length]
+        # The client terminates each framed payload with a newline. Consume it.
+        leftover = buffer[length:]
+        if leftover.startswith(b"\n"):
+            leftover = leftover[1:]
+        else:
+            try:
+                chunk = self.client_socket.recv(1)
+            except ssl.SSLWantReadError:
+                chunk = b""
+            if chunk and chunk != b"\n":
+                # Misbehaving client; keep the byte for the next read.
+                leftover += chunk
+        if leftover:
+            self._read_buffer = leftover
+        return payload.decode()
+    
+    def receive_pipeline(self, use_framing=None):
         """
         Receive multiple commands in pipeline mode.
         
         Returns:
             List of commands or None if connection closed
         """
-        data = self.client_socket.recv(65536)
+        data = self.receive(use_framing=use_framing)
         if not data:
             return None
         
         # Split by delimiter for multiple commands
         # Commands can be separated by ;; or newlines
-        commands_text = data.decode().strip()
+        commands_text = data.strip()
         if ';;' in commands_text:
             commands = [cmd.strip() for cmd in commands_text.split(';;') if cmd.strip()]
             return commands
@@ -92,13 +178,20 @@ class ClientHandler(threading.Thread):
         print(f"[SERVER] Client {self.address} connected")
         
         try:
-            # Send welcome
-            self.send(f"KosDB v{__version__}")
-            self.send("Commands: LOGIN <user> <pass> | HELP | QUIT | PIPELINE")
+            # Send welcome. Framing is not yet enabled so send line-based.
+            self.client_socket.sendall(f"KosDB v{__version__}\n".encode())
+            self.client_socket.sendall("Commands: LOGIN <user> <pass> | HELP | QUIT | PIPELINE\n".encode())
+            self._read_buffer = b""
             
             while self.running:
+                # Read using the framing protocol currently in effect. Save the
+                # state so the response is sent with the same protocol; this
+                # makes SET FRAMING ON's own reply line-based and avoids a
+                # protocol race during the transition.
+                was_framing = self.client_state.get('framing', False)
+
                 # Check for pipeline mode commands
-                data = self.receive()
+                data = self.receive(use_framing=was_framing)
                 if not data:
                     break
                 
@@ -111,9 +204,9 @@ class ClientHandler(threading.Thread):
                         commands = [cmd.strip() for cmd in pipeline_part.split(';;') if cmd.strip()]
                     else:
                         # Multi-line pipeline follows
-                        commands = self.receive_pipeline()
+                        commands = self.receive_pipeline(use_framing=was_framing)
                         if not commands:
-                            self.send("ERROR: Empty pipeline")
+                            self.send("ERROR: Empty pipeline", use_framing=was_framing)
                             continue
                     
                     # Execute pipeline
@@ -121,14 +214,14 @@ class ClientHandler(threading.Thread):
                         responses = self.handle_pipeline(commands)
                         # Send aggregated response
                         response_text = "\n".join([f"[{i+1}] {r}" for i, r in enumerate(responses)])
-                        self.send(f"PIPELINE RESULTS ({len(responses)} commands):\n{response_text}")
+                        self.send(f"PIPELINE RESULTS ({len(responses)} commands):\n{response_text}", use_framing=was_framing)
                     else:
-                        self.send("ERROR: No commands in pipeline")
+                        self.send("ERROR: No commands in pipeline", use_framing=was_framing)
                     continue
                 
                 # Regular single command
                 response = self.handle_command(data)
-                self.send(response)
+                self.send(response, use_framing=was_framing)
                 
                 if data.upper() == 'QUIT':
                     break
@@ -141,7 +234,29 @@ class ClientHandler(threading.Thread):
     
     def handle_command(self, command):
         cmd_upper = command.upper()
-        
+
+        # Handle framing setup before authentication so it works for everyone.
+        if cmd_upper.startswith('SET FRAMING '):
+            parts = command.split()
+            if len(parts) == 3 and parts[2].upper() == 'ON':
+                self.client_state['framing'] = True
+                return "OK: Framing enabled"
+            if len(parts) == 3 and parts[2].upper() == 'OFF':
+                self.client_state['framing'] = False
+                return "OK: Framing disabled"
+            return "ERROR: Usage: SET FRAMING ON|OFF"
+
+        # Handle JSON setup before authentication so it works for everyone.
+        if cmd_upper.startswith('SET JSON '):
+            parts = command.split()
+            if len(parts) == 3 and parts[2].upper() == 'ON':
+                self.client_state['json_format'] = True
+                return "OK: JSON format enabled"
+            if len(parts) == 3 and parts[2].upper() == 'OFF':
+                self.client_state['json_format'] = False
+                return "OK: JSON format disabled"
+            return "ERROR: Usage: SET JSON ON|OFF"
+
         # Handle login
         if cmd_upper.startswith('LOGIN '):
             parts = command.split()
@@ -156,22 +271,22 @@ class ClientHandler(threading.Thread):
                 self.client_state['is_admin'] = user_info.get('is_admin', False)
                 return f"OK: Welcome {username}"
             return "ERROR: Authentication failed"
-        
+
         # Require authentication
         if not self.authenticated:
             return "ERROR: Please login first"
-        
+
         # Handle USE command with connection-level state
         if cmd_upper.startswith('USE '):
             parts = command.split()
             db_name = parts[1] if len(parts) > 1 else None
             if not db_name:
                 return "ERROR: Usage: USE <database>"
-            
+
             # Check if database exists
             if db_name not in self.db.list_databases():
                 return f"ERROR: Database '{db_name}' does not exist"
-            
+
             # Switch the engine to this database and track connection-level state.
             # NOTE: the Database instance is shared across connections; commands
             # operate on the engine's currently selected database.
@@ -179,31 +294,39 @@ class ClientHandler(threading.Thread):
                 result = self.db.use_database(db_name)
             except Exception as e:
                 return f"ERROR: Failed to open database: {e}"
-            
+
             self.client_state['current_db'] = db_name
             return result
-        
+
         # Parse and execute other commands
         try:
             cmd_type, params = self.parser.parse(command)
-            
+
             if cmd_type == 'QUIT':
                 # Clean up connection-level database handle
                 if self.client_state.get('connection_db'):
                     self.client_state['connection_db'].close()
                     self.client_state['connection_db'] = None
                 return "OK: Goodbye"
-            
+
             if cmd_type == 'HELP':
                 return self._get_help()
-            
+
             if cmd_type == 'UNKNOWN':
                 return "ERROR: Unknown command"
-            
-            # Execute command with connection-level state
-            response = self.commands.execute(cmd_type, params, self.client_state)
+
+            # Execute command with connection-level state.
+            # Serialize write commands through the server lock because the
+            # Database instance is shared across threads.
+            if cmd_type in ('CREATE', 'DROP', 'ALTER_TABLE', 'INSERT',
+                            'UPDATE', 'UPSERT', 'DELETE', 'SET_TABLE',
+                            'CREATE_DB', 'DROP_DB'):
+                with self.server_lock:
+                    response = self.commands.execute(cmd_type, params, self.client_state)
+            else:
+                response = self.commands.execute(cmd_type, params, self.client_state)
             return response
-            
+
         except Exception as e:
             return f"ERROR: {str(e)}"
     
@@ -261,6 +384,7 @@ class SocketServer:
         self.authenticator = Authenticator(self.db)
         self.running = False
         self.socket = None
+        self.lock = threading.Lock()
         
         # Initialize replication client if configured
         self.replication_client = None
@@ -298,10 +422,11 @@ class SocketServer:
                         continue
                 
                 handler = ClientHandler(
-                    client_socket, 
-                    address, 
-                    self.db, 
+                    client_socket,
+                    address,
+                    self.db,
                     self.authenticator,
+                    self.lock,
                     self.replication_client,
                     self.tls_wrapper
                 )

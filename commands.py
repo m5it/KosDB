@@ -580,6 +580,7 @@ class CommandRegistry:
             'BATCH_UPDATE': BatchUpdateCommand(self.db, self.replication_client),
             'DELETE': DeleteCommand(self.db, self.replication_client),
             'SET': SetCommand(self.db, self.replication_client),
+            'SET_FRAMING': SetCommand(self.db, self.replication_client),
             'SHOW_TABLES': ShowTablesCommand(self.db, self.replication_client),
             'SHOW_DATABASES': ShowDatabasesCommand(self.db, self.replication_client),
             'SHOW_USERS': ShowUsersCommand(self.db, self.replication_client),
