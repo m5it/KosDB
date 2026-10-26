@@ -54,6 +54,10 @@ class CommandParser:
                 r'^\s*SET\s+(?P<option>\w+)\s+(?P<value>\w+)\s*$',
                 re.IGNORECASE
             ),
+            'SET_FRAMING': re.compile(
+                r'^\s*SET\s+FRAMING\s+(?P<value>ON|OFF)\s*$',
+                re.IGNORECASE
+            ),
             'BATCH_UPDATE': re.compile(
                 rf'^\s*BATCH\s+UPDATE\s+(?P<table>{table_ref})\s+SET\s+(?P<set>.+?)\s+WHERE\s+(?P<where_col>\w+)\s+IN\s*\((?P<where_values>[^)]+)\)\s*$',
                 re.IGNORECASE

@@ -255,6 +255,9 @@ class SetCommand(Command):
         if option == 'JSON':
             client_state['json_format'] = (value == 'ON')
             return f"OK: JSON format {'enabled' if value == 'ON' else 'disabled'}"
+        if option == 'FRAMING':
+            client_state['framing'] = (value == 'ON')
+            return f"OK: Framing {'enabled' if value == 'ON' else 'disabled'}"
         return f"ERROR: Unknown SET option '{option}'"
 
 
