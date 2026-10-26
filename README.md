@@ -13,6 +13,13 @@ See [docs/INSTALL.md](docs/INSTALL.md) for detailed instructions.
 - [Operations](docs/OPERATIONS.md)
 - [Quick Reference](docs/QUICK_REFERENCE.md)
 
+## :) To start install in debian/ubuntu python3-plyvel
+python3 server.py -h # For help...
+python3 server.py --prepare-admin admin --prepare-password adminpassword
+python3 server.py --port 3306
+
+# now you can connect and login
+
 ## Export and Import
 
 KosDB includes offline export/import utilities that operate directly on the LevelDB data files.
