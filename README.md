@@ -13,7 +13,7 @@ See [docs/INSTALL.md](docs/INSTALL.md) for detailed instructions.
 - [Operations](docs/OPERATIONS.md)
 - [Quick Reference](docs/QUICK_REFERENCE.md)
 
-## :) To start install in debian/ubuntu -> apt install python3-plyvel
+## :) To start in debian/ubuntu first install -> apt install python3-plyvel
 python3 server.py -h # For help...
 
 python3 server.py --prepare-admin admin --prepare-password adminpassword
