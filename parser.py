@@ -33,17 +33,19 @@ class CommandParser:
             ),
 
             'INSERT': re.compile(
-                rf'^\s*INSERT\s+INTO\s+(?P<table>{table_ref})(?:\s*\((?P<columns>[^)]+)\))?\s+VALUES\s*\((?P<values>[^)]+)\)\s*$',
+                rf'^\s*INSERT\s+INTO\s+(?P<table>{table_ref})(?:\s*\((?P<columns>[^)]+)\))?\s+VALUES\s*\((?P<values>.+)\)\s*$',
                 re.IGNORECASE
             ),
             'UPSERT': re.compile(
-                rf'^\s*UPSERT\s+INTO\s+(?P<table>{table_ref})(?:\s*\((?P<columns>[^)]+)\))?\s+VALUES\s*\((?P<values>[^)]+)\)\s*$',
+                rf'^\s*UPSERT\s+INTO\s+(?P<table>{table_ref})(?:\s*\((?P<columns>[^)]+)\))?\s+VALUES\s*\((?P<values>.+)\)\s*$',
                 re.IGNORECASE
             ),
             'SELECT': re.compile(
                 rf'^\s*SELECT\s+(?P<columns>[\w\s*,]+)\s+FROM\s+(?P<table>{table_ref})'
                 rf'(?:\s+WHERE\s+(?P<where>.+?))?'
-                rf'(?:\s+ORDER\s+BY\s+(?P<order_by>\w+)(?:\s+(?P<order_dir>ASC|DESC))?)?\s*$',
+                rf'(?:\s+ORDER\s+BY\s+(?P<order_by>\w+)(?:\s+(?P<order_dir>ASC|DESC))?)?'
+                rf'(?:\s+LIMIT\s+(?P<limit>\d+))?'
+                rf'(?:\s+OFFSET\s+(?P<offset>\d+))?\s*$',
                 re.IGNORECASE
             ),
             'UPDATE': re.compile(
@@ -248,7 +250,13 @@ class CommandParser:
                 # Parse ORDER BY
                 if 'order_by' in params:
                     params['order_desc'] = (params.get('order_dir') or 'ASC').upper() == 'DESC'
-                
+
+                # Parse LIMIT/OFFSET
+                if 'limit' in params and params['limit']:
+                    params['limit'] = int(params['limit'])
+                if 'offset' in params and params['offset']:
+                    params['offset'] = int(params['offset'])
+
                 return cmd_type, params
         
         return 'UNKNOWN', None
@@ -283,45 +291,72 @@ class CommandParser:
                 params[key] = self._strip_backticks(params[key])
 
     def _parse_values(self, values_str: str) -> list:
-        """Parse VALUES clause into list of values"""
+        """Parse VALUES clause into list of values, respecting quotes and escapes."""
         values = []
-        current = ''
+        current = []
         in_string = False
         string_char = None
-        
+        escape = False
+
         for char in values_str:
+            if escape:
+                if char == 'n':
+                    current.append('\n')
+                elif char == 'r':
+                    current.append('\r')
+                elif char == 't':
+                    current.append('\t')
+                elif char == '\\':
+                    current.append('\\')
+                elif char in ("'", '"'):
+                    current.append(char)
+                else:
+                    current.append('\\' + char)
+                escape = False
+                continue
+            if char == '\\' and in_string:
+                escape = True
+                continue
             if char in ("'", '"') and not in_string:
                 in_string = True
                 string_char = char
                 continue
-            elif char == string_char and in_string:
+            if char == string_char and in_string:
                 in_string = False
                 string_char = None
-                values.append(current.strip())
-                current = ''
+                values.append(''.join(current))
+                current = []
                 continue
-            
             if char == ',' and not in_string:
-                if current.strip():
-                    values.append(current.strip())
-                current = ''
+                if current:
+                    values.append(''.join(current).strip())
+                current = []
             else:
-                current += char
-        
-        if current.strip():
-            values.append(current.strip())
-        
+                current.append(char)
+
+        if current:
+            tail = ''.join(current).strip()
+            if tail:
+                values.append(tail)
+
         result = []
         for v in values:
             v = v.strip()
-            try:
-                if '.' in v:
-                    result.append(float(v))
-                else:
-                    result.append(int(v))
-            except ValueError:
+            if (v.startswith("'") and v.endswith("'")) or (v.startswith('"') and v.endswith('"')):
+                # Strip surrounding quotes and unescape doubled quotes.
+                q = v[0]
+                v = v[1:-1].replace(q + q, q)
                 result.append(v)
-        
+            elif v.upper() == 'NULL':
+                result.append(None)
+            else:
+                try:
+                    if '.' in v:
+                        result.append(float(v))
+                    else:
+                        result.append(int(v))
+                except ValueError:
+                    result.append(v)
         return result
     
     def _parse_set_clause(self, set_str: str) -> Dict[str, Any]:

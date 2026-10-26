@@ -75,14 +75,9 @@ class ClientHandler(threading.Thread):
     def receive(self, use_framing=None):
         if use_framing is None:
             use_framing = self.client_state.get('framing', False)
-        try:
-            if use_framing:
-                return self._receive_framed()
-            return self._receive_line()
-        except Exception as e:
-            # TLS sockets can raise on connection close; treat as disconnect.
-            print(f"[SERVER] Receive error: {e}")
-            return None
+        if use_framing:
+            return self._receive_framed()
+        return self._receive_line()
     
     def _read_buffer_until(self, marker: bytes) -> bytes:
         """Return data up to (excluding) marker, leaving marker+rest buffered."""
@@ -190,11 +185,15 @@ class ClientHandler(threading.Thread):
                 # protocol race during the transition.
                 was_framing = self.client_state.get('framing', False)
 
-                # Check for pipeline mode commands
-                data = self.receive(use_framing=was_framing)
+                try:
+                    # Check for pipeline mode commands
+                    data = self.receive(use_framing=was_framing)
+                except Exception as e:
+                    print(f"[SERVER] Receive error: {e}")
+                    break
                 if not data:
                     break
-                
+
                 # Check if this is a pipeline request
                 if data.upper().startswith('PIPELINE'):
                     # Parse pipeline commands
@@ -208,7 +207,7 @@ class ClientHandler(threading.Thread):
                         if not commands:
                             self.send("ERROR: Empty pipeline", use_framing=was_framing)
                             continue
-                    
+
                     # Execute pipeline
                     if commands:
                         responses = self.handle_pipeline(commands)
@@ -218,11 +217,11 @@ class ClientHandler(threading.Thread):
                     else:
                         self.send("ERROR: No commands in pipeline", use_framing=was_framing)
                     continue
-                
+
                 # Regular single command
                 response = self.handle_command(data)
                 self.send(response, use_framing=was_framing)
-                
+
                 if data.upper() == 'QUIT':
                     break
                     

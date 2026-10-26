@@ -199,12 +199,14 @@ class SelectCommand(Command):
             where = params.get('where')
             order_by = params.get('order_by')
             order_desc = params.get('order_desc', False)
-            raw = self.db.select(params['table'], columns, where, order_by, order_desc, raw=True)
-            if isinstance(raw, str):
-                return raw
-            if client_state.get('json_format'):
-                return self.db._format_results_json(columns, raw)
-            return self.db._format_results(columns, raw)
+            limit = params.get('limit')
+            offset = params.get('offset')
+            result = self.db.select(
+                params['table'], columns, where, order_by, order_desc,
+                raw=False, limit=limit, offset=offset,
+                json_format=client_state.get('json_format', False)
+            )
+            return result
         except Exception as e:
             return f"ERROR: {e}"
 

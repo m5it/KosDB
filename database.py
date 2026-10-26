@@ -172,12 +172,20 @@ class Database:
         """Ensure system tables for users and privileges exist."""
         # Users table
         if not self._system_db.get(b"_schema:_users"):
-            schema = {"columns": ["username", "password_hash", "is_admin", "created_at"], "next_id": 1}
+            schema = {
+                "columns": ["username", "password_hash", "is_admin", "created_at"],
+                "column_types": {c: "TEXT" for c in ["username", "password_hash", "is_admin", "created_at"]},
+                "next_id": 1
+            }
             self._system_db.put(b"_schema:_users", json.dumps(schema).encode())
-        
+
         # Privileges table
         if not self._system_db.get(b"_schema:_privileges"):
-            schema = {"columns": ["username", "db_pattern", "table_pattern", "privileges"], "next_id": 1}
+            schema = {
+                "columns": ["username", "db_pattern", "table_pattern", "privileges"],
+                "column_types": {c: "TEXT" for c in ["username", "db_pattern", "table_pattern", "privileges"]},
+                "next_id": 1
+            }
             self._system_db.put(b"_schema:_privileges", json.dumps(schema).encode())
     
     def _hash_password(self, password: str) -> str:
@@ -377,41 +385,56 @@ class Database:
         """Create a table with schema, primary key and secondary indexes."""
         if not self._db:
             return "No database selected. Use USE <database>"
-        
+
         schema_key = f"_schema:{table_name}".encode()
         if self._db.get(schema_key) or schema_key in self._transaction_changes:
             return f"Table '{table_name}' already exists"
-        
+
         parsed_columns = []
+        col_types = {}
         primary_key = None
         index_columns = []
-        
+
         for col in columns:
             col_stripped = col.strip()
             col_upper = col_stripped.upper()
             # Extract just the column name (first whitespace-delimited token)
             col_name = col_stripped.split()[0]
+            # Try to preserve a type hint, e.g. "name TEXT" -> "TEXT".
+            tokens = col_stripped.split()
+            col_type = tokens[1].upper() if len(tokens) > 1 else "TEXT"
             if 'PRIMARY KEY' in col_upper:
                 primary_key = col_name
                 parsed_columns.append(primary_key)
+                # Historically the auto-increment id defaulted to INTEGER; preserve
+                # the declared type when one is present.
+                col_types[primary_key] = col_type if len(tokens) > 1 else 'INTEGER'
             elif 'INDEX' in col_upper:
                 parsed_columns.append(col_name)
                 index_columns.append(col_name)
+                col_types[col_name] = col_type
             else:
                 parsed_columns.append(col_name)
-        
+                col_types[col_name] = col_type
+
+        # If the user only supplied a primary-key column name (legacy syntax),
+        # default its type to INTEGER so dumps round-trip correctly.
+        if primary_key and primary_key not in col_types:
+            col_types[primary_key] = 'INTEGER'
+
         schema = {
             "columns": parsed_columns,
+            "column_types": col_types,
             "next_id": 1,
             "primary_key": primary_key,
             "indexes": index_columns
         }
         self._transaction_put(schema_key, json.dumps(schema).encode())
-        
+
         if primary_key:
             idx_key = f"_index:{table_name}:{primary_key}".encode()
             self._transaction_put(idx_key, json.dumps({}).encode())
-        
+
         for idx_col in index_columns:
             idx_key = f"_index:{table_name}:{idx_col}".encode()
             self._transaction_put(idx_key, json.dumps({}).encode())
@@ -586,8 +609,11 @@ class Database:
                where: Optional[Dict[str, Any]] = None,
                order_by: Optional[str] = None,
                order_desc: bool = False,
-               raw: bool = False) -> Any:
-        """Select rows from a table with optional ordering."""
+               raw: bool = False,
+               limit: Optional[int] = None,
+               offset: Optional[int] = None,
+               json_format: bool = False) -> Any:
+        """Select rows from a table with optional ordering and pagination."""
         if not self._db:
             return "No database selected. Use USE <database>" if not raw else []
         
@@ -631,19 +657,22 @@ class Database:
             if order_by == "id":
                 results = self._sort_results(results, "id", order_desc)
         
+        # Apply pagination to raw results before column filtering.
+        total = len(results)
+        if limit is not None:
+            start = offset or 0
+            results = results[start:start + limit]
+
         if raw:
             return results
-        
-        if not results:
-            return "Empty set"
-        
+
         filtered_results = []
         for row in results:
             filtered_row = {col: row.get(col, "NULL") for col in columns}
             filtered_results.append(filtered_row)
-        
+
         # Support JSON wire format via client_state or default to ASCII
-        return self._format_results(columns, filtered_results)
+        return self._format_results(columns, filtered_results, use_json=json_format, total=total)
     
     def _can_use_index(self, schema: Dict, where: Dict) -> bool:
         """Check if WHERE clause can use an index."""
@@ -922,27 +951,29 @@ class Database:
         
         return f"Deleted {deleted} row(s) from '{table_name}'"
     
-    def _format_results(self, columns: List[str], results: List[Dict], use_json: bool = False) -> str:
+    def _format_results(self, columns: List[str], results: List[Dict], use_json: bool = False, total: Optional[int] = None) -> str:
         """
         Format query results as table string or JSON.
-        
+
         Args:
             columns: List of column names
             results: List of row dictionaries
             use_json: If True, return JSON format instead of ASCII table
-        
+            total: Optional total number of rows before pagination.
+
         Returns:
             Formatted string (ASCII table or JSON)
         """
         if not results:
-            return json.dumps({"columns": columns, "rows": [], "count": 0}) if use_json else "Empty set"
-        
+            return json.dumps({"columns": columns, "rows": [], "count": 0, "total": total or 0}) if use_json else "Empty set"
+
         if use_json:
             # JSON wire format - efficient parsing, smaller payload
             return json.dumps({
                 "columns": columns,
                 "rows": results,
-                "count": len(results)
+                "count": len(results),
+                "total": total if total is not None else len(results)
             })
         
         # ASCII table format (legacy, human-readable)

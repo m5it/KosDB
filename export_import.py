@@ -104,16 +104,17 @@ class KosDBExporter:
             return [f"-- Table '{table_name}' schema not found"]
 
         columns = schema.get("columns", [])
+        column_types = schema.get('column_types', {})
         primary_key = schema.get("primary_key")
         indexes = schema.get("indexes", [])
 
         col_specs = []
         for col in columns:
-            # Default to TEXT unless the column is the auto-increment id.
-            if col == primary_key and col.lower() == 'id':
-                spec = f"{col} INTEGER PRIMARY KEY"
+            col_type = column_types.get(col, 'TEXT').upper()
+            if col == primary_key:
+                spec = f"{col} {col_type} PRIMARY KEY"
             else:
-                spec = f"{col} TEXT"
+                spec = f"{col} {col_type}"
             if col in indexes:
                 spec += " INDEX"
             col_specs.append(spec)
@@ -126,25 +127,23 @@ class KosDBExporter:
             return lines
 
         # Preserve next_id for tables with auto-increment primary key.
-        if primary_key and primary_key.lower() == 'id':
+        if primary_key:
             next_id = schema.get('next_id', 1)
             if next_id > 1:
                 lines.append(f"SET TABLE {table_name} next_id {next_id};")
 
+        def _quote_value(val):
+            if val is None:
+                return "NULL"
+            if isinstance(val, (int, float)):
+                return str(val)
+            if isinstance(val, (list, dict)):
+                return "'" + json.dumps(val).replace("'", "''").replace("\\", "\\\\") + "'"
+            return "'" + str(val).replace("\\", "\\\\").replace("'", "''").replace("\n", "\\n").replace("\r", "\\r") + "'"
+
         for row in rows:
             row_columns = [col for col in columns if col in row]
-            values = []
-            for col in row_columns:
-                val = row[col]
-                if isinstance(val, (int, float)):
-                    values.append(str(val))
-                elif isinstance(val, (list, dict)):
-                    values.append(json.dumps(val).replace("'", "''"))
-                elif val is None:
-                    values.append("NULL")
-                else:
-                    escaped = str(val).replace("'", "''")
-                    values.append(f"'{escaped}'")
+            values = [_quote_value(row[col]) for col in row_columns]
             col_list = ", ".join(row_columns)
             val_list = ", ".join(values)
             lines.append(f"INSERT INTO {table_name} ({col_list}) VALUES ({val_list});")
@@ -179,9 +178,7 @@ class KosDBImporter:
         with open(input_file, "r", encoding="utf-8") as f:
             content = f.read()
 
-        # Strip comments and split into statements
-        cleaned = self._strip_comments(content)
-        statements = [s.strip() for s in cleaned.split(";") if s.strip()]
+        statements = self._split_statements(content)
 
         client_state = {
             'current_db': None,
@@ -192,51 +189,118 @@ class KosDBImporter:
 
         executed = 0
         errors = []
+        failed = False
 
         for stmt in statements:
+            if failed:
+                errors.append(f"Skipped after earlier error: {stmt[:60]}")
+                continue
             try:
                 cmd_type, params = self.parser.parse(stmt)
                 if cmd_type == 'UNKNOWN':
                     errors.append(f"Unknown command: {stmt[:60]}")
+                    failed = True
                     continue
                 response = self.registry.execute(cmd_type, params or {}, client_state)
-                if cmd_type == 'USE':
-                    # Use result updates current_db when successful
-                    if response.startswith("Switched") or "Already using" in response:
-                        # current_db was set by UseDatabaseCommand
-                        pass
                 if response.startswith("ERROR"):
                     errors.append(f"{stmt[:60]}: {response}")
+                    failed = True
                 else:
                     executed += 1
             except Exception as e:
                 errors.append(f"{stmt[:60]}: {e}")
+                failed = True
 
         if errors:
             return f"OK: Imported {executed} statement(s), {len(errors)} error(s):\n" + "\n".join(errors)
         return f"OK: Imported {executed} statement(s) from {input_file}"
 
     @staticmethod
-    def _strip_comments(sql: str) -> str:
-        """Remove SQL-style comments from dump content."""
-        lines = []
-        in_multiline = False
-        for line in sql.splitlines():
-            stripped = line.strip()
-            if in_multiline:
-                if "*/" in stripped:
-                    in_multiline = False
+    def _split_statements(sql: str) -> List[str]:
+        """Split SQL dump into executable statements, ignoring comments.
+
+        Statement boundaries are only recognised at top-level semicolons so that
+        semicolons inside quoted string literals are not treated as terminators.
+        """
+        # Strip block comments first.
+        sql = re.sub(r"/\*.*?\*/", "", sql, flags=re.DOTALL)
+        statements = []
+        current = []
+        quote_char = None
+        escape = False
+        for ch in sql:
+            if escape:
+                current.append(ch)
+                escape = False
                 continue
-            if stripped.startswith("/*"):
-                if "*/" not in stripped:
-                    in_multiline = True
+            if ch == "\\" and quote_char in ("'", '"'):
+                current.append(ch)
+                escape = True
                 continue
-            if stripped.startswith("--") or stripped.startswith("#"):
+            if quote_char is None:
+                if ch in ("'", '"'):
+                    quote_char = ch
+                    current.append(ch)
+                elif ch == ";":
+                    stmt = "".join(current).strip()
+                    # Drop standalone line comments inside the accumulated text.
+                    stmt = KosDBImporter._strip_line_comments(stmt)
+                    if stmt:
+                        statements.append(stmt)
+                    current = []
+                else:
+                    current.append(ch)
+            else:
+                current.append(ch)
+                if ch == quote_char:
+                    quote_char = None
+        # Trailing statement without semicolon
+        stmt = "".join(current).strip()
+        stmt = KosDBImporter._strip_line_comments(stmt)
+        if stmt:
+            statements.append(stmt)
+        return statements
+
+    @staticmethod
+    def _strip_line_comments(stmt: str) -> str:
+        """Remove line-style comments from a statement without touching quoted strings."""
+        result = []
+        quote_char = None
+        escape = False
+        i = 0
+        while i < len(stmt):
+            ch = stmt[i]
+            if escape:
+                result.append(ch)
+                escape = False
+                i += 1
                 continue
-            # Remove inline -- comments
-            line = re.sub(r"--.*$", "", line)
-            lines.append(line)
-        return "\n".join(lines)
+            if ch == "\\" and quote_char in ("'", '"'):
+                result.append(ch)
+                escape = True
+                i += 1
+                continue
+            if quote_char is None:
+                if ch in ("'", '"'):
+                    quote_char = ch
+                    result.append(ch)
+                elif ch == "-" and i + 1 < len(stmt) and stmt[i + 1] == "-":
+                    # Skip until newline or end of string.
+                    while i < len(stmt) and stmt[i] != "\n":
+                        i += 1
+                    continue
+                elif ch == "#":
+                    while i < len(stmt) and stmt[i] != "\n":
+                        i += 1
+                    continue
+                else:
+                    result.append(ch)
+            else:
+                result.append(ch)
+                if ch == quote_char:
+                    quote_char = None
+            i += 1
+        return "".join(result).strip()
 
     def close(self):
         self.db.close()
