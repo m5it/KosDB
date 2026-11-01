@@ -394,6 +394,7 @@ class Database:
         col_types = {}
         primary_key = None
         index_columns = []
+        unique_columns = []
 
         for col in columns:
             col_stripped = col.strip()
@@ -406,9 +407,15 @@ class Database:
             if 'PRIMARY KEY' in col_upper:
                 primary_key = col_name
                 parsed_columns.append(primary_key)
-                # Historically the auto-increment id defaulted to INTEGER; preserve
-                # the declared type when one is present.
                 col_types[primary_key] = col_type if len(tokens) > 1 else 'INTEGER'
+            elif 'UNIQUE' in col_upper:
+                parsed_columns.append(col_name)
+                if col_name not in unique_columns:
+                    unique_columns.append(col_name)
+                # UNIQUE implies INDEX for lookup
+                if col_name not in index_columns:
+                    index_columns.append(col_name)
+                col_types[col_name] = col_type
             elif 'INDEX' in col_upper:
                 parsed_columns.append(col_name)
                 index_columns.append(col_name)
@@ -417,8 +424,6 @@ class Database:
                 parsed_columns.append(col_name)
                 col_types[col_name] = col_type
 
-        # If the user only supplied a primary-key column name (legacy syntax),
-        # default its type to INTEGER so dumps round-trip correctly.
         if primary_key and primary_key not in col_types:
             col_types[primary_key] = 'INTEGER'
 
@@ -427,17 +432,11 @@ class Database:
             "column_types": col_types,
             "next_id": 1,
             "primary_key": primary_key,
-            "indexes": index_columns
+            "indexes": index_columns,
+            "unique": unique_columns
         }
         self._transaction_put(schema_key, json.dumps(schema).encode())
-
-        if primary_key:
-            idx_key = f"_index:{table_name}:{primary_key}".encode()
-            self._transaction_put(idx_key, json.dumps({}).encode())
-
-        for idx_col in index_columns:
-            idx_key = f"_index:{table_name}:{idx_col}".encode()
-            self._transaction_put(idx_key, json.dumps({}).encode())
+        # Per-entry indexes need no aggregated blob initialization
         
         # Log to binlog
         if self._binlog:
@@ -463,6 +462,11 @@ class Database:
         prefix = f"{table_name}:".encode()
         for key, _ in self._db.iterator(prefix=prefix):
             self._transaction_delete(key)
+        
+        # Clean per-entry indexes and legacy aggregated blobs
+        for pfx in [f"_idx:{table_name}:".encode(), f"_index:{table_name}:".encode()]:
+            for key, _ in self._db.iterator(prefix=pfx):
+                self._transaction_delete(key)
         
         self._transaction_delete(schema_key)
         
@@ -528,6 +532,11 @@ class Database:
             
             row = {"id": store_key}
             row.update(data)
+
+            # Enforce UNIQUE constraints via per-entry index
+            uniq_err = self._check_unique_violation(table_name, row, store_key, schema)
+            if uniq_err:
+                return uniq_err
             
             self._transaction_put(key, json.dumps(row).encode())
             self._update_indexes(table_name, row, store_key, schema)
@@ -543,67 +552,49 @@ class Database:
             )
         
         return f"Inserted 1 row into '{table_name}'"
+    # --- Per-entry secondary indexes: key = _idx:{table}:{col}\x00{value}\x00{row_key} ---
+    def _idx_key(self, table_name: str, col: str, value: Any, row_key: str) -> bytes:
+        return f"_idx:{table_name}:{col}\x00{value}\x00{row_key}".encode()
+
+    def _idx_prefix(self, table_name: str, col: str, value: Any = None) -> bytes:
+        if value is None:
+            return f"_idx:{table_name}:{col}\x00".encode()
+        return f"_idx:{table_name}:{col}\x00{value}\x00".encode()
+
+    def _check_unique_violation(self, table_name: str, row: Dict, row_key: str, schema: Dict) -> Optional[str]:
+        for col in schema.get("unique", []):
+            if col not in row:
+                continue
+            val = str(row[col])
+            prefix = self._idx_prefix(table_name, col, val)
+            # Any existing entry with same value but different row_key => violation
+            # Check both pending transaction and DB
+            # First check transaction_changes for pending inserts
+            for k in self._transaction_changes:
+                if k.startswith(prefix) and not k.decode().endswith(f"\x00{row_key}"):
+                    return f"ERROR: Duplicate unique value '{val}' for column '{col}' in '{table_name}'"
+            for k, _ in self._db.iterator(prefix=prefix):
+                # skip if it's exactly our own key (update of same row)
+                if k.decode().endswith(f"\x00{row_key}"):
+                    continue
+                return f"ERROR: Duplicate unique value '{val}' for column '{col}' in '{table_name}'"
+        return None
+
     def _update_indexes(self, table_name: str, row: Dict, row_key: str, schema: Dict):
-        """Update all indexes for a row (transaction-aware)."""
-        primary_key = schema.get("primary_key")
-        indexes = schema.get("indexes", [])
-        
-        if primary_key and primary_key in row:
-            idx_key = f"_index:{table_name}:{primary_key}".encode()
-            idx_data = self._get_current(idx_key)
-            if idx_data:
-                index_map = json.loads(idx_data.decode())
-                index_map[str(row[primary_key])] = row_key
-                self._transaction_put(idx_key, json.dumps(index_map).encode())
-        
-        for idx_col in indexes:
+        """Create per-entry index keys."""
+        for idx_col in schema.get("indexes", []):
             if idx_col in row:
-                idx_key = f"_index:{table_name}:{idx_col}".encode()
-                idx_data = self._get_current(idx_key)
-                if idx_data:
-                    index_map = json.loads(idx_data.decode())
-                    val = str(row[idx_col])
-                    if val not in index_map:
-                        index_map[val] = []
-                    if isinstance(index_map[val], list):
-                        if row_key not in index_map[val]:
-                            index_map[val].append(row_key)
-                    else:
-                        index_map[val] = [index_map[val], row_key]
-                    self._transaction_put(idx_key, json.dumps(index_map).encode())
+                val = str(row[idx_col])
+                idx_key = self._idx_key(table_name, idx_col, val, row_key)
+                self._transaction_put(idx_key, b"1")
     
     def _remove_from_indexes(self, table_name: str, row: Dict, row_key: str, schema: Dict):
-        """Remove a row's entries from all indexes (transaction-aware)."""
-        primary_key = schema.get("primary_key")
-        indexes = schema.get("indexes", [])
-        
-        if primary_key and primary_key in row:
-            idx_key = f"_index:{table_name}:{primary_key}".encode()
-            idx_data = self._get_current(idx_key)
-            if idx_data:
-                index_map = json.loads(idx_data.decode())
-                if index_map.pop(str(row[primary_key]), None) is not None:
-                    self._transaction_put(idx_key, json.dumps(index_map).encode())
-        
-        for idx_col in indexes:
+        """Delete per-entry index keys."""
+        for idx_col in schema.get("indexes", []):
             if idx_col in row:
-                idx_key = f"_index:{table_name}:{idx_col}".encode()
-                idx_data = self._get_current(idx_key)
-                if idx_data:
-                    index_map = json.loads(idx_data.decode())
-                    val = str(row[idx_col])
-                    entries = index_map.get(val)
-                    if entries is None:
-                        continue
-                    if not isinstance(entries, list):
-                        entries = [entries]
-                    if row_key in entries:
-                        entries.remove(row_key)
-                    if entries:
-                        index_map[val] = entries
-                    else:
-                        index_map.pop(val, None)
-                    self._transaction_put(idx_key, json.dumps(index_map).encode())
+                val = str(row[idx_col])
+                idx_key = self._idx_key(table_name, idx_col, val, row_key)
+                self._transaction_delete(idx_key)
     
     def select(self, table_name: str, columns: Optional[List[str]] = None,
                where: Optional[Dict[str, Any]] = None,
@@ -713,116 +704,108 @@ class Database:
             return True  # Conservative: assume might exist on error
     
     def _select_with_where_index(self, table_name: str, where: Dict, schema: Dict) -> List[Dict]:
-        """Select using index for WHERE clause filtering with Bloom filter optimization."""
+        """Select using per-entry index + legacy fallback."""
         results = []
         indexes = schema.get("indexes", [])
         primary_key = schema.get("primary_key")
-        
-        # Find which column to use for index lookup
         index_col = None
         for col in where.keys():
             if col == primary_key or col in indexes:
                 index_col = col
                 break
-        
         if not index_col:
             return results
-        
         lookup_val = str(where[index_col])
-        idx_key = f"_index:{table_name}:{index_col}".encode()
-        
-        # Bloom filter optimization: quick check if index key might exist
-        if self._bloom_filter_bits > 0 and not self._key_might_exist(idx_key):
-            return results  # Index definitely doesn't exist
-        
-        idx_data = self._db.get(idx_key)
-        
-        if not idx_data:
-            return results
-        
-        index_map = json.loads(idx_data.decode())
-        row_keys = index_map.get(lookup_val, [])
-        
-        if not isinstance(row_keys, list):
-            row_keys = [row_keys]
-        
-        for row_key in row_keys:
-            row_key_full = f"{table_name}:{row_key}".encode()
-            
-            # Bloom filter optimization for row existence check
-            if self._bloom_filter_bits > 0 and not self._key_might_exist(row_key_full):
-                continue  # Row definitely doesn't exist
-            
-            row_data = self._db.get(row_key_full)
+        # PK fast path: direct get
+        if index_col == primary_key:
+            row_data = self._get_current(self._make_key(table_name, lookup_val))
             if row_data:
                 row = json.loads(row_data.decode())
-                # Verify all WHERE conditions match
-                match = True
-                for col, val in where.items():
-                    if str(row.get(col)) != str(val):
-                        match = False
-                        break
-                if match:
+                ok = all(str(row.get(c)) == str(v) for c, v in where.items())
+                if ok:
                     results.append(row)
-        
+            return results
+        prefix = self._idx_prefix(table_name, index_col, lookup_val)
+        found = False
+        for k, _ in self._db.iterator(prefix=prefix):
+            found = True
+            row_key = k.decode().rsplit("\x00", 1)[-1]
+            row_data = self._get_current(f"{table_name}:{row_key}".encode())
+            if not row_data:
+                continue
+            row = json.loads(row_data.decode())
+            if all(str(row.get(c)) == str(v) for c, v in where.items()):
+                results.append(row)
+        if found:
+            return results
+        # Legacy fallback: aggregated blob _index:table:col
+        legacy_key = f"_index:{table_name}:{index_col}".encode()
+        idx_data = self._db.get(legacy_key)
+        if not idx_data:
+            return results
+        try:
+            index_map = json.loads(idx_data.decode())
+        except Exception:
+            return results
+        row_keys = index_map.get(lookup_val, [])
+        if not isinstance(row_keys, list):
+            row_keys = [row_keys]
+        for row_key in row_keys:
+            row_data = self._get_current(f"{table_name}:{row_key}".encode())
+            if row_data:
+                row = json.loads(row_data.decode())
+                if all(str(row.get(c)) == str(v) for c, v in where.items()):
+                    results.append(row)
         return results
     
     def _select_with_index(self, table_name: str, where: Optional[Dict],
-                          order_by: str, order_desc: bool, schema: Dict) -> List[Dict]:
-        """Select using index for ordering."""
+                           order_by: str, order_desc: bool, schema: Dict) -> List[Dict]:
+        """Per-entry ORDER BY + legacy fallback."""
         results = []
-        
+        prefix_b = self._idx_prefix(table_name, order_by)
+        idx_entries = list(self._db.iterator(prefix=prefix_b))
+        if idx_entries:
+            if order_desc:
+                idx_entries = list(reversed(idx_entries))
+            for k, _ in idx_entries:
+                row_key = k.decode().rsplit(chr(0), 1)[-1]
+                row_data = self._get_current(f"{table_name}:{row_key}".encode())
+                if not row_data:
+                    continue
+                row = json.loads(row_data.decode())
+                if where and not all(str(row.get(c)) == str(v) for c, v in where.items()):
+                    continue
+                results.append(row)
+            return results
         idx_key = f"_index:{table_name}:{order_by}".encode()
         idx_data = self._db.get(idx_key)
-        
         if idx_data:
-            index_map = json.loads(idx_data.decode())
-            sorted_vals = sorted(index_map.keys(), reverse=order_desc)
-            
-            for val in sorted_vals:
-                row_keys = index_map[val]
-                if not isinstance(row_keys, list):
-                    row_keys = [row_keys]
-                
-                for row_key in row_keys:
-                    row_key_full = f"{table_name}:{row_key}".encode()
-                    row_data = self._db.get(row_key_full)
-                    if row_data:
+            try:
+                index_map = json.loads(idx_data.decode())
+                sorted_vals = sorted(index_map.keys(), reverse=order_desc)
+                for val in sorted_vals:
+                    row_keys = index_map[val]
+                    if not isinstance(row_keys, list):
+                        row_keys = [row_keys]
+                    for row_key in row_keys:
+                        row_data = self._get_current(f"{table_name}:{row_key}".encode())
+                        if not row_data: continue
                         row = json.loads(row_data.decode())
-                        
-                        if where:
-                            match = True
-                            for col, w_val in where.items():
-                                if str(row.get(col)) != str(w_val):
-                                    match = False
-                                    break
-                            if not match:
-                                continue
-                        
+                        if where and not all(str(row.get(c)) == str(v) for c, v in where.items()): continue
                         results.append(row)
-        else:
-            prefix = f"{table_name}:".encode()
-            for key, value in self._db.iterator(prefix=prefix):
-                if key.startswith(f"_schema:{table_name}".encode()):
-                    continue
-                
-                row = json.loads(value.decode())
-                
-                if where:
-                    match = True
-                    for col, val in where.items():
-                        if str(row.get(col)) != str(val):
-                            match = False
-                            break
-                    if not match:
-                        continue
-                
-                results.append(row)
-            
-            results = self._sort_results(results, order_by, order_desc)
-        
+                return results
+            except Exception:
+                pass
+        prefix = f"{table_name}:".encode()
+        for key, value in self._db.iterator(prefix=prefix):
+            if key.startswith(f"_schema:{table_name}".encode()): continue
+            if key.startswith(b"_idx:") or key.startswith(b"_index:"): continue
+            row = json.loads(value.decode())
+            if where and not all(str(row.get(c)) == str(v) for c, v in where.items()): continue
+            results.append(row)
+        results = self._sort_results(results, order_by, order_desc)
         return results
-    
+
     def update(self, table_name: str, set_clause: Dict[str, Any],
                where: Optional[Dict[str, Any]] = None) -> str:
         """Update rows in a table."""
@@ -847,6 +830,8 @@ class Database:
         
         for key, value in self._db.iterator(prefix=prefix):
             if key.startswith(f"_schema:{table_name}".encode()):
+                continue
+            if key.startswith(b"_idx:") or key.startswith(b"_index:"):
                 continue
             
             row = json.loads(value.decode())
@@ -879,6 +864,11 @@ class Database:
             else:
                 self._transaction_put(key, json.dumps(row).encode())
             
+            # Enforce UNIQUE on update
+            if any(c in set_clause for c in schema.get("unique",[])):
+                uerr=self._check_unique_violation(table_name, row, new_store_key, schema)
+                if uerr:
+                    return uerr + f" (updated {updated} row(s) before error)"
             # Maintain indexes for changed indexed columns / moved rows
             if touches_index or new_store_key != store_key:
                 self._remove_from_indexes(table_name, old_row, store_key, schema)

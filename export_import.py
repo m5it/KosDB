@@ -106,16 +106,19 @@ class KosDBExporter:
         columns = schema.get("columns", [])
         column_types = schema.get('column_types', {})
         primary_key = schema.get("primary_key")
-        indexes = schema.get("indexes", [])
+        indexes = set(schema.get("indexes", []))
+        uniques = set(schema.get("unique", []))
 
         col_specs = []
         for col in columns:
             col_type = column_types.get(col, 'TEXT').upper()
             if col == primary_key:
                 spec = f"{col} {col_type} PRIMARY KEY"
+            elif col in uniques:
+                spec = f"{col} {col_type} UNIQUE"
             else:
                 spec = f"{col} {col_type}"
-            if col in indexes:
+            if col in indexes and col not in uniques:
                 spec += " INDEX"
             col_specs.append(spec)
 
